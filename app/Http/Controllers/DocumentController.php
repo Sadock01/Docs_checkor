@@ -24,7 +24,7 @@ class DocumentController extends Controller
 
 
             if ($search) {
-                $query->whereRaw("identifier LIKE " % " . $search . " % "");
+                $query->whereRaw("identifier LIKE ?", ['%' . $search . '%']);
             }
 
             $total = $query->count();
@@ -33,43 +33,46 @@ class DocumentController extends Controller
 
             return response()->json([
                 'status_code' => 200,
-                'status_message' => 'The list of documents retrieved',
+                'status_message' => 'Les documents ont été récupérés avec succès',
                 'current_page' => $page,
                 'last_page' => ceil($total / $perPage),
                 'items' => $result,
             ]);
         } catch (Exception $e) {
 
-            return response()->json(['message' => 'Error retrieving list documents', 'error' => $e->getMessage()], 500);
+            return response()->json([
+                'statut_code' => 401,
+                'message' => 'Erreur survenue lors de la recuperation des documents',
+                'error' => $e->getMessage()
+            ], );
         }
 
-        return response()->json([
-            'message' => 'Documents retrieved successfully',
-            'data' => $documents,
-        ]);
+
     }
 
     public function store(DocumentRequest $request)
     {
+        
         try {
             $document = Document::create([
                 'identifier' => $request->input('identifier'),
                 'description' => $request->input('description'),
                 'hash' => hash('sha256', $request->input('identifier')), // Génération automatique du hash
-                'user_id' => Auth::user()->id
+                'type_id' => $request->type_id,
 
             ]);
-
-
+         $document->users()->attach(Auth::id());
+            
             return response()->json([
                 'status_code' => 200,
-                'status_message' => 'Document created successfully',
+                'status_message' => 'Document creé avec succès.',
                 'data' => $document
             ]);
         } catch (Exception $e) {
 
             return response()->json([
-                'message' => 'Error creating document',
+                'statut_code' => 401,
+                'message' => 'Erreur survenue lors de la création du document',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -85,16 +88,21 @@ class DocumentController extends Controller
                 'description' => $request->input('description'),
                 'hash' => hash('sha256', $request->input('identifier')), // Mise à jour du hash
                 'type_id' => $request->input('type_id'),
-
+               
             ]);
+            $document->users()->attach(Auth::id());
             return response()->json([
                 'status_code' => 200,
-                'status_message' => 'Document updated successfully',
+                'status_message' => 'Document mise à jour avec succès.',
                 'data' => $document,
             ]);
         } catch (Exception $e) {
 
-            return response()->json(['message' => 'Error updating document', 'error' => $e->getMessage()], 500);
+            return response()->json([
+                'statut_code' => 401,
+                'message' => 'Erreur survenue lors de la mise à jour du document',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -107,14 +115,15 @@ class DocumentController extends Controller
 
             return response()->json([
                 'status_code' => 200,
-                'status_message' => 'Document deleted successfully',
+                'status_message' => 'Document supprimé avec succès',
                 'data' => $document,
 
             ]);
         } catch (Exception $e) {
 
             return response()->json([
-                'message' => 'Error deleting document',
+                'statut_code' => 401,
+                'message' => 'Erreur survenue lors de la suppression du document',
                 'error' => $e->getMessage()
             ], 500);
         }

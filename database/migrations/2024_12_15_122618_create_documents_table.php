@@ -11,12 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('documents', function (Blueprint $table) {
-            // Ajout de la colonne type_id
+        Schema::create('documents', function (Blueprint $table) {
+            $table->id();
+            $table->string('identifier')->unique(); 
+            $table->string('description'); 
+            $table->string('hash')->unique(); 
             $table->unsignedBigInteger('type_id');
-
-            // Définir la clé étrangère
             $table->foreign('type_id')->references('id')->on('types');
+            $table->timestamps();
         });
     }
 
@@ -25,12 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('documents', function (Blueprint $table) {
-            // Supprimer la clé étrangère si elle existe
-            $table->dropForeign(['type_id']);
-
-            // Supprimer la colonne type_id
-            $table->dropColumn('type_id');
-        });
+        Schema::dropIfExists('documents');
     }
 };

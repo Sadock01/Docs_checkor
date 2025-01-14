@@ -13,8 +13,10 @@ class CreateDocumentUserTable extends Migration
     {
         Schema::create('document_user', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('document_id')->constrained()->onDelete('cascade'); // Clé étrangère vers documents
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');     // Clé étrangère vers users
+            $table->unsignedBigInteger('document_id');
+            $table->foreign('document_id')->references('id')->on('documents');
+            $table->unsignedBigInteger('user_id');
+            $table->foreign('user_id')->references('id')->on('users');     // Clé étrangère vers users
             $table->timestamps();
         });
     }

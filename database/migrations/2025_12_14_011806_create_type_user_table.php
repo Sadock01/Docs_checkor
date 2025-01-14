@@ -13,10 +13,11 @@ return new class extends Migration
     {
         Schema::create('type_user', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->foreignId('type_id')->constrained()->onDelete('cascade');
+            $table->unsignedBigInteger('user_id');
+            $table->foreign('user_id')->references('id')->on('users');
+            $table->unsignedBigInteger('type_id');
+            $table->foreign('type_id')->references('id')->on('types');     
             $table->timestamps();
-            $table->unique(['user_id', 'type_id']); // Assurez-vous que la combinaison est unique
         });
     }
 

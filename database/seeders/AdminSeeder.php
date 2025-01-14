@@ -22,7 +22,9 @@ class AdminSeeder extends Seeder
             'lastname' => 'Doe',
             'email' => 'johndoe@mail.test', // Email de l'administrateur
             'password' => Hash::make('password'), // Mot de passe sécurisé
+            'status' => true, // Activer le compte
             'role_id' => 1, // Attribuer un rôle d'admin (par exemple role_id = 1, à ajuster en fonction de vos rôles)
+            
         ]);
     }
 }

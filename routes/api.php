@@ -21,10 +21,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('types/create', [TypeController::class, 'store']);
     Route::put('types/edit/type{id}', [TypeController::class, 'update']);
 
+    Route::post('/logout', [AuthController::class, 'logout']);
+
     // Retourner l'utilisateur actuellement connecté
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
+
+    Route::patch('/users/{id}/activate', [UserController::class, 'activate'])->name('users.activate');
+    Route::patch('/users/{id}/deactivate', [UserController::class, 'deactivate'])->name('users.deactivate');
+    Route::patch('/users/{id}/status', [UserController::class, 'updateStatus'])->name('users.updateStatus');
 });
 
 // Routes publiques

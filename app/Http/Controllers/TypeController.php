@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Type;
 use Exception;
+use Illuminate\Support\Facades\Auth;
+
 
 class TypeController extends Controller
 {
@@ -21,7 +23,7 @@ class TypeController extends Controller
 
 
             if ($search) {
-                $query->whereRaw("identifier LIKE " % " . $search . " % "");
+                $query->whereRaw("identifier LIKE ?", ['%' . $search . '%']);
             }
 
             $total = $query->count();
@@ -30,50 +32,61 @@ class TypeController extends Controller
 
             return response()->json([
                 'status_code' => 200,
-                'status_message' => 'The list of types retrieved',
+                'status_message' => 'Types recupérés avec succès',
                 'current_page' => $page,
                 'last_page' => ceil($total / $perPage),
                 'items' => $result,
             ]);
         } catch (Exception $e) {
 
-            return response()->json(['message' => 'Error retrieving list types', 'error' => $e->getMessage()], 500);
+            return response()->json([
+                'statut_code' => 401,
+                'message' => 'Erreur survenue lors de la recupération des Types',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
     public function store(Request $request)
     {
+      
         $validated = $request->validate([
             'name' => 'required|string|unique:types',
             'description' => 'nullable|string',
         ]);
 
         try {
+           
             $type = Type::create([
                 'name' => $validated['name'],
                 'description' => $validated['description'],
 
             ]);
-
+           
+            $type->users()->attach(Auth::id());
+             
             return response()->json([
-                'message' => 'Type created successfully',
+                'message' => 'Type créé avec succès',
                 'data' => $type
             ], 201);
         } catch (Exception $e) {
             return response()->json([
-                'message' => 'Error creating type', 
-                'error' => $e->getMessage()], 500);
+                'statut_code' => 401,
+                'message' => 'Erreur lors de la création du Type',
+                'error' => $e->getMessage()
+            ], );
         }
     }
 
     public function update(Request $request, $id)
     {
+        dd('type');
         // Validation des données d'entrée
         $validated = $request->validate([
             'name' => 'required|string|unique:types,name,' . $id,  // Exclure l'ID actuel pour l'unicité
             'description' => 'nullable|string',
         ]);
-
+dd('type');
         try {
 
             $type = Type::findOrFail($id);
@@ -86,10 +99,18 @@ class TypeController extends Controller
             $type->save();
 
 
-            return response()->json(['message' => 'Type updated successfully', 'data' => $type], 200);
+            return response()->json([
+                'statut_code' => 200,
+                'message' => 'Type a été mise à jour avec succès',
+                'data' => $type
+            ], );
         } catch (Exception $e) {
 
-            return response()->json(['message' => 'Error updating type', 'error' => $e->getMessage()], 500);
+            return response()->json([
+                'satut_code' => 401,
+                'message' => 'Erreur survenue lors de la mise à jour du Type',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }

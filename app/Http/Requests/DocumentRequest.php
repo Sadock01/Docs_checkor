@@ -37,6 +37,7 @@ class DocumentRequest extends FormRequest
         return [
             'identifier' => 'required|string|unique:documents',
             'description' => 'required|string|max:200',
+            'type_id'=> 'required|exists:types,id',
             
         ];
     }
