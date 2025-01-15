@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\UserRequest;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Exception;
@@ -48,16 +49,9 @@ class UserController extends Controller
         }
     }
 
-    public function create(Request $request)
+    public function store(UserRequest $request)
     {
-        $request->validate([
-            'firstname' => 'required|string|max:255',
-            'lastname' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:8',
-            'role_id' => 'required|exists:roles,id',
-        ]);
-
+        // La validation se fera automatiquement ici
         try {
             $user = User::create([
                 'firstname' => $request->firstname,
@@ -91,44 +85,51 @@ class UserController extends Controller
         }
     }
 
-    public function update(Request $request, User $user)
+    public function update(Request $request, $id)
     {
-        $request->validate([
-            'firstname' => 'sometimes|string|max:255',
-            'lastname' => 'sometimes|string|max:255',
-            'email' => 'sometimes|email|unique:users,email,' . $user->id,
-            'password' => 'sometimes|min:8',
-            'status' => 'sometimes|boolean',
-            'role_id' => 'sometimes|exists:roles,id',
-        ]);
-
         try {
-            $data = $request->only(['firstname', 'lastname', 'email', 'password', 'status', 'role_id']);
+            // Récupération de l'utilisateur à mettre à jour
+            $user = User::findOrFail($id);
+            
+            // Validation des données entrantes
+            $request->validate([
 
-            if (isset($data['password'])) {
-                $data['password'] = bcrypt($data['password']);
-            }
+                'firstname' => 'sometimes|string|max:255',
+                'lastname' => 'sometimes|string|max:255',
+                'email' => 'sometimes|email|unique:users,email,' . $id,
+                'password' => 'sometimes|min:8',
+                'status' => 'sometimes|boolean',
+                'role_id' => 'sometimes|exists:roles,id',
+            ]);
 
-            $user->update($data);
+            // Mise à jour des données utilisateur
+            $user->update([
+                'firstname' => $request->input('firstname', $user->firstname), // Utilise la valeur existante si non fournie
+                'lastname' => $request->input('lastname', $user->lastname),
+                'email' => $request->input('email', $user->email),
+                'password' => $request->has('password') ? bcrypt($request->input('password')) : $user->password,
+                'status' => $request->input('status', $user->status),
+                'role_id' => $request->input('role_id', $user->role_id),
+            ]);
+
+            // Mise à jour des rôles si nécessaire (si vous utilisez Spatie Role)
+            // if ($request->has('role_id')) {
+            //     $user->syncRoles([$request->input('role_id')]);
+            // }
 
             return response()->json([
                 'status_code' => 200,
                 'status_message' => 'Utilisateur mis à jour avec succès.',
-                'user' => [
-                    'id' => $user->id,
-                    'firstname' => $user->firstname,
-                    'lastname' => $user->lastname,
-                    'email' => $user->email,
-                    'status' => $user->status,
-                    'role_id' => $user->role_id,
-                ],
-            ], 200);
+                'data' => $user,
+            ]);
         } catch (Exception $e) {
             return response()->json([
-                'status_code' => 401,
+                'status_code' => 500,
                 'message' => 'Erreur survenue lors de la mise à jour de l\'utilisateur.',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
+
+
 }

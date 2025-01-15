@@ -79,38 +79,37 @@ class TypeController extends Controller
     }
 
     public function update(Request $request, $id)
-    {
-        dd('type');
-        // Validation des données d'entrée
+{
+    try {
+        // Étape 1 : Validation des données d'entrée
         $validated = $request->validate([
-            'name' => 'required|string|unique:types,name,' . $id,  // Exclure l'ID actuel pour l'unicité
+            'name' => 'sometimes|string|unique:types,name,' . $id, // Exclure l'ID actuel pour l'unicité
             'description' => 'nullable|string',
         ]);
-dd('type');
-        try {
 
-            $type = Type::findOrFail($id);
+        // Étape 2 : Récupération du type à mettre à jour
+        $type = Type::findOrFail($id);
 
+        // Étape 3 : Mise à jour des données
+        $type->update([
+            'name' => $validated['name'] ?? $type->name,
+            'description' => $validated['description'] ?? $type->description,
+        ]);
 
-            $type->name = $validated['name'];
-            $type->description = $validated['description'];
-
-
-            $type->save();
-
-
-            return response()->json([
-                'statut_code' => 200,
-                'message' => 'Type a été mise à jour avec succès',
-                'data' => $type
-            ], );
-        } catch (Exception $e) {
-
-            return response()->json([
-                'satut_code' => 401,
-                'message' => 'Erreur survenue lors de la mise à jour du Type',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        // Étape 4 : Réponse en cas de succès
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Le type a été mis à jour avec succès.',
+            'data' => $type,
+        ]);
+    } catch (Exception $e) {
+        // Étape 5 : Gestion des erreurs
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Une erreur est survenue lors de la mise à jour du type.',
+            'error' => $e->getMessage(),
+        ], 500);
     }
+}
+
 }
