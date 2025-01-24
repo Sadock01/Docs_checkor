@@ -21,6 +21,7 @@ return new class extends Migration
             $table->boolean('status')->default(false);
             $table->unsignedBigInteger('role_id');
             $table->foreign('role_id')->references('id')->on('roles');
+            $table->timestamp('last_activity')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });

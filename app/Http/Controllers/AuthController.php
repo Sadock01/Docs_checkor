@@ -52,6 +52,21 @@ class AuthController extends Controller
         ];
     }
 
+    public function checkUserActivity()
+{
+    $user = Auth::user();
+    $inactiveTime = now()->diffInMinutes($user->last_activity);
+
+    if ($inactiveTime > 30) { // Exemple : 15 minutes d'inactivité
+        Auth::logout(); // Déconnecter l'utilisateur
+        return response()->json([
+            'message' => 'Votre session a expiré en raison d\'une inactivité prolongée.'
+        ], 401);
+    }
+
+    return response()->json(['message' => 'Session active.']);
+}
+
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();

@@ -9,7 +9,8 @@ use App\Http\Controllers\TypeController;
 
 Route::middleware('auth:sanctum')->group(function () {
     // Retourner les documents créés à l'utilisateur actuellement connecté
-    Route::post('documents/create', [DocumentController::class, 'store']);
+    Route::get('documents', [DocumentController::class, 'index']);
+Route::post('documents/create', [DocumentController::class, 'store']);
     Route::put('documents/edit/document{id}', [DocumentController::class, 'update']);
 
     // Retourner les collaborateurs créés
@@ -34,6 +35,7 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 // Routes publiques
-Route::get('documents', [DocumentController::class, 'index']);
+
 Route::post('/login', [AuthController::class, 'login']);
-Route::get('types', [TypeController::class, 'index']);
+Route::get('types', [TypeController::class, 'index']); 
+Route::post('documents/verify-document', [DocumentController::class, 'verifyDocument']);

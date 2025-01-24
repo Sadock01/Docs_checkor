@@ -35,7 +35,7 @@ class TypeController extends Controller
                 'status_message' => 'Types recupérés avec succès',
                 'current_page' => $page,
                 'last_page' => ceil($total / $perPage),
-                'items' => $result,
+                'data' => $result,
             ]);
         } catch (Exception $e) {
 

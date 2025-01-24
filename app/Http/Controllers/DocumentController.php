@@ -128,4 +128,33 @@ class DocumentController extends Controller
             ], 500);
         }
     }
+
+
+    public function verifyDocument(Request $request)
+    {
+        // Valider les données envoyées par le front
+        $request->validate([
+            'identifier' => 'required|string',
+        ]);
+
+        // Récupérer l'identifiant envoyé
+        $identifier = $request->input('identifier');
+
+        // Vérifier si le document existe dans la base de données
+        $document = Document::where('identifier', $identifier)->first();
+
+        if ($document) {
+            // Retourner la description du document
+            return response()->json([
+                'success' => true,
+                'data' => $document->description,
+            ], 200);
+        } else {
+            // Retourner un message d'erreur si le document n'existe pas
+            return response()->json([
+                'success' => false,
+                'message' => 'Le document avec cet identifiant n\'existe pas.',
+            ], 404);
+        }
+    }
 }
