@@ -65,7 +65,7 @@ class DocumentController extends Controller
             
             return response()->json([
                 'status_code' => 200,
-                'status_message' => 'Document creé avec succès.',
+                'message' => 'Document creé avec succès!',
                 'data' => $document
             ]);
         } catch (Exception $e) {
