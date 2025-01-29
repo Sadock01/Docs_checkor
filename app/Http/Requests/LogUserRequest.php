@@ -25,13 +25,14 @@ class LogUserRequest extends FormRequest
     {
         return [
             'email' => 'required|email|exists:users,email',
-            'password' => 'required|min:6'
+            'password' => 'required|min:8'
         ];
     }
 
     public function failedValidation(Validator $validator)
     {
         throw new HttpResponseException(response()->json([
+            'status_code' => 422,
             'success' => false,
             'error' => true,
             'message' => 'Erreur de validation',
