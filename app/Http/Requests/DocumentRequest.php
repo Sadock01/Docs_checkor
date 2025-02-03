@@ -46,7 +46,7 @@ class DocumentRequest extends FormRequest
     private function updateRules()
     {
         return [
-            'identifier' => 'required|string|unique:documents,identifier,' . $this->route('document'),
+            'identifier' => 'required|string',
             'description' => 'required|string|max:200',
             'type_id' => 'required|exists:types,id', 
            

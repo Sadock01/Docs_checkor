@@ -11,7 +11,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Retourner les documents créés à l'utilisateur actuellement connecté
     Route::get('documents', [DocumentController::class, 'index']);
 Route::post('documents/create', [DocumentController::class, 'store']);
-    Route::put('documents/edit/document{id}', [DocumentController::class, 'update']);
+    Route::put('documents/edit/document/{id}', [DocumentController::class, 'update']);
+    Route::get('/documents/{id}', [DocumentController::class, 'show']);
+
 
     // Retourner les collaborateurs créés
     Route::get('users', [UserController::class, 'index']);

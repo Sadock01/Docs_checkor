@@ -18,15 +18,15 @@ class DocumentController extends Controller
         try {
 
             $query = Document::query();
-            $perPage = 5;
-            $page = $request->input('page', 5);
+            $perPage = 10;
+            $page = $request->input('page', 1);
             $search = $request->input('search');
 
 
             if ($search) {
                 $query->whereRaw("identifier LIKE ?", ['%' . $search . '%']);
             }
-
+            $query->orderBy('created_at', 'desc');
             $total = $query->count();
 
             $result = $query->offset(($page - 1) * $perPage)->limit($perPage)->get();
@@ -49,6 +49,27 @@ class DocumentController extends Controller
 
 
     }
+
+    public function show($id)
+{
+    try {
+        $document = Document::findOrFail($id);
+
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Document récupéré avec succès.',
+            'data' => $document,
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'statut_code' => 404,
+            'message' => 'Document introuvable.',
+            'error' => $e->getMessage()
+        ], 404);
+    }
+}
+
+
 
     public function store(DocumentRequest $request)
     {
