@@ -33,7 +33,7 @@ class DocumentController extends Controller
 
             return response()->json([
                 'status_code' => 200,
-                'status_message' => 'Les documents ont été récupérés avec succès',
+                'message' => 'Les documents ont été récupérés avec succès',
                 'current_page' => $page,
                 'last_page' => ceil($total / $perPage),
                 'data' => $result,
@@ -114,7 +114,7 @@ class DocumentController extends Controller
             $document->users()->attach(Auth::id());
             return response()->json([
                 'status_code' => 200,
-                'status_message' => 'Document mise à jour avec succès.',
+                'message' => 'Document mise à jour avec succès.',
                 'data' => $document,
             ]);
         } catch (Exception $e) {

@@ -35,7 +35,7 @@ class LogUserRequest extends FormRequest
             'status_code' => 422,
             'success' => false,
             'error' => true,
-            'message' => 'Erreur de validation',
+            'message' => 'Identifiant ou mot de passe incorrect',
             'errorList' => $validator->errors()
         ]));
     }
