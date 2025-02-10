@@ -34,6 +34,15 @@ Route::post('documents/create', [DocumentController::class, 'store']);
     Route::patch('/users/{id}/activate', [UserController::class, 'activate'])->name('users.activate');
     Route::patch('/users/{id}/deactivate', [UserController::class, 'deactivate'])->name('users.deactivate');
     Route::patch('/users/{id}/status', [UserController::class, 'updateStatus'])->name('users.updateStatus');
+
+  
+
+Route::get('dashboard/recent-verifications', [DocumentController::class, 'getVerificationHistory']);
+Route::get('dashboard/stats', [DocumentController::class, 'statisticsByDay']);
+Route::get('dashboard/total-verifications', [DocumentController::class, 'totalVerifications']);
+Route::get('dashboard/total-documents', [DocumentController::class, 'totalDocuments']);
+Route::get('filterBy/status', [DocumentController::class, 'getVerificationsByStatus']);
+
 });
 
 // Routes publiques

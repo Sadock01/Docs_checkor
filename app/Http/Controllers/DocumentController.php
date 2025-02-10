@@ -7,6 +7,7 @@ use App\Models\Document;
 use App\Http\Requests\DocumentRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Verification;
 
 use Exception;
 
@@ -17,7 +18,15 @@ class DocumentController extends Controller
 
         try {
 
-            $query = Document::query();
+            $query = Document::select(
+                'documents.id',
+                'documents.identifier',
+                'documents.description',
+                'documents.type_id',
+                'types.name as type_name' // Récupérer le nom du type
+            )
+            ->join('types', 'documents.type_id', '=', 'types.id') // Jointure avec types
+            ->orderBy('documents.created_at', 'desc');
             $perPage = 10;
             $page = $request->input('page', 1);
             $search = $request->input('search');
@@ -26,7 +35,7 @@ class DocumentController extends Controller
             if ($search) {
                 $query->whereRaw("identifier LIKE ?", ['%' . $search . '%']);
             }
-            $query->orderBy('created_at', 'desc');
+            // $query->orderBy('created_at', 'desc');
             $total = $query->count();
 
             $result = $query->offset(($page - 1) * $perPage)->limit($perPage)->get();
@@ -53,7 +62,16 @@ class DocumentController extends Controller
     public function show($id)
 {
     try {
-        $document = Document::findOrFail($id);
+        $document = Document::select(
+            'documents.id',
+            'documents.identifier',
+            'documents.description',
+            'documents.type_id',
+            'types.name as type_name' // Récupérer le nom du type
+        )
+        ->join('types', 'documents.type_id', '=', 'types.id') // Jointure avec types
+        ->where('documents.id', $id)
+        ->firstOrFail();
 
         return response()->json([
             'status_code' => 200,
@@ -82,8 +100,20 @@ class DocumentController extends Controller
                 'type_id' => $request->type_id,
 
             ]);
+            
          $document->users()->attach(Auth::id());
             
+         $document = Document::select(
+            'documents.id',
+            'documents.identifier',
+            'documents.description',
+            'documents.type_id',
+            'types.name as type_name'
+        )
+        ->join('types', 'documents.type_id', '=', 'types.id')
+        ->where('documents.id', $document->id)
+        ->first();
+        
             return response()->json([
                 'status_code' => 200,
                 'message' => 'Document creé avec succès!',
@@ -152,30 +182,175 @@ class DocumentController extends Controller
 
 
     public function verifyDocument(Request $request)
-    {
-        // Valider les données envoyées par le front
-        $request->validate([
-            'identifier' => 'required|string',
+{
+    // Valider les données envoyées par le front
+    $request->validate([
+        'identifier' => 'required|string',
+    ]);
+
+    // Récupérer l'identifiant envoyé
+    $identifier = $request->input('identifier');
+
+    // Vérifier si le document existe dans la base de données
+    $document = Document::where('identifier', $identifier)->first();
+
+    if ($document) {
+        // La vérification réussit (success: true)
+        $status = 'Authentique'; // Statut basé sur le succès de la vérification
+
+        // Enregistrer la vérification dans la table `verifications`
+        $verification = Verification::create([
+            'identifier' => $document->identifier,
+            'verification_date' => now(), // Date et heure actuelles
+            'status' => $status, // Statut basé sur le succès de la vérification
         ]);
 
-        // Récupérer l'identifiant envoyé
-        $identifier = $request->input('identifier');
+        // Retourner la description du document et le statut de la vérification
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'description' => $document->description,
+                'status' => $verification->status,
+            ],
+        ], 200);
+    } else {
+        // La vérification échoue (success: false)
+        $status = 'Frauduleux'; // Statut basé sur l'échec de la vérification
 
-        // Vérifier si le document existe dans la base de données
-        $document = Document::where('identifier', $identifier)->first();
+        // Enregistrer la vérification dans la table `verifications`
+        $verification = Verification::create([
+           'identifier' => $identifier,  // Aucun document associé
+            'verification_date' => now(), // Date et heure actuelles
+            'status' => $status, // Statut basé sur l'échec de la vérification
+        ]);
 
-        if ($document) {
-            // Retourner la description du document
-            return response()->json([
-                'success' => true,
-                'data' => $document->description,
-            ], 200);
-        } else {
-            // Retourner un message d'erreur si le document n'existe pas
-            return response()->json([
-                'success' => false,
-                'message' => 'Le document avec cet identifiant n\'existe pas.',
-            ], 404);
-        }
+        // Retourner un message d'erreur si le document n'existe pas
+        return response()->json([
+            'success' => false,
+            'message' => 'Le document avec cet identifiant n\'existe pas.',
+            'data' => [
+                'status' => $verification->status,
+            ],
+        ], 404);
     }
+}
+
+    public function getVerificationHistory(Request $request)
+{
+    try {
+        $query = Verification::query();
+        $perPage = 10;
+        $page = $request->input('page', 1);
+        $search = $request->input('search');
+
+        // Filtrer par identifiant du document si une recherche est effectuée
+        if ($search) {
+            $query->whereHas('document', function ($q) use ($search) {
+                $q->where('identifier', 'LIKE', '%' . $search . '%');
+            });
+        }
+
+        // Trier par date de vérification
+        $query->orderBy('verification_date', 'desc');
+
+        // Pagination
+        $total = $query->count();
+        $result = $query->with('document') // Charger les données du document associé
+            ->offset(($page - 1) * $perPage)
+            ->limit($perPage)
+            ->get();
+
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Historique des vérifications récupéré avec succès.',
+            'current_page' => $page,
+            'last_page' => ceil($total / $perPage),
+            'data' => $result,
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Erreur lors de la récupération de l\'historique des vérifications.',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
+
+public function getVerificationsByStatus(Request $request)
+{
+    try {
+        $status = $request->input('status'); // Récupérer le paramètre 'status'
+        $perPage = 10;
+        $page = $request->input('page', 1);
+
+        if (!$status) {
+            return response()->json([
+                'status_code' => 400,
+                'message' => 'Le paramètre "status" est requis.',
+            ], 400);
+        }
+
+        // Filtrer les vérifications par status
+        $query = Verification::where('status', $status);
+
+        // Pagination
+        $total = $query->count();
+        $result = $query->with('document') // Charger les données du document associé
+            ->offset(($page - 1) * $perPage)
+            ->limit($perPage)
+            ->get();
+
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Historique des vérifications filtré par statut récupéré avec succès.',
+            'current_page' => $page,
+            'last_page' => ceil($total / $perPage),
+            'data' => $result,
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Erreur lors de la récupération des vérifications par statut.',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
+
+
+public function statisticsLastDays($days)
+{
+    $statistics = Verification::selectRaw('DATE(verification_date) as date, COUNT(*) as total')
+    ->where('verification_date', '>=', now()->subDays($days))
+    ->groupBy('date')
+    ->orderBy('date', 'ASC')
+    ->get();
+
+    return response()->json([
+        'success' => true,
+        'status_code'=> 200,
+        'data' => $statistics,
+    ]);
+}
+
+public function totalVerifications()
+{
+    $total = Verification::count();
+
+    return response()->json([
+        'success' => true,
+        'total_verifications' => $total,
+    ]);
+}
+
+public function totalDocuments()
+{
+    $total = Document::count();
+
+    return response()->json([
+        'success' => true,
+        'total_documents' => $total,
+    ]);
+}
+
+
 }
