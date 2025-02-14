@@ -42,6 +42,7 @@ Route::get('dashboard/stats', [DocumentController::class, 'statisticsByDay']);
 Route::get('dashboard/total-verifications', [DocumentController::class, 'totalVerifications']);
 Route::get('dashboard/total-documents', [DocumentController::class, 'totalDocuments']);
 Route::get('filterBy/status', [DocumentController::class, 'getVerificationsByStatus']);
+Route::get('verifications/stats', [DocumentController::class, 'getVerificationStats']);
 
 });
 
@@ -50,3 +51,4 @@ Route::get('filterBy/status', [DocumentController::class, 'getVerificationsBySta
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('types', [TypeController::class, 'index']); 
 Route::post('documents/verify-document', [DocumentController::class, 'verifyDocument']);
+Route::post('/upload-document', [DocumentController::class, 'uploadDocument']);

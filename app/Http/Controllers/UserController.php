@@ -29,7 +29,7 @@ class UserController extends Controller
                 'status_message' => 'Liste des utilisateurs récupérée avec succès.',
                 'current_page' => $page,
                 'last_page' => ceil($total / $perPage),
-                'items' => $result->map(function ($user) {
+                'data' => $result->map(function ($user) {
                     return [
                         'id' => $user->id,
                         'firstname' => $user->firstname,

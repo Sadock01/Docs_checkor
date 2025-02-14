@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 
 use App\Models\Document;
+
 use App\Http\Requests\DocumentRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Verification;
+use setasign\Fpdi\Fpdi;;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
+
 
 use Exception;
 
@@ -276,6 +280,29 @@ class DocumentController extends Controller
     }
 }
 
+public function getVerificationStats()
+{
+    try {
+        $stats = Verification::selectRaw("DATE(verification_date) as date, status, COUNT(*) as count")
+            ->groupBy('date', 'status')
+            ->orderBy('date', 'desc')
+            ->get();
+
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Statistiques des vérifications récupérées avec succès.',
+            'data' => $stats,
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Erreur lors de la récupération des statistiques.',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
+
+
 public function getVerificationsByStatus(Request $request)
 {
     try {
@@ -352,5 +379,114 @@ public function totalDocuments()
     ]);
 }
 
+public function uploadDocument(Request $request)
+{
+    try {
+        // Vérifier si un fichier est envoyé
+        if (!$request->hasFile('file')) {
+            return response()->json(['error' => 'Aucun fichier trouvé'], 400);
+        }
+
+        $file = $request->file('file');
+        // Vérifier si c'est un PDF
+        if ($file->getClientOriginalExtension() !== 'pdf') {
+            return response()->json(['error' => 'Seuls les fichiers PDF sont autorisés'], 400);
+        }
+
+        // Vérifier si le document existe déjà (en se basant sur le nom du fichier, ou le hash par exemple)
+        $fileName = time() . '_' . $file->getClientOriginalName();
+        $existingDocument = Document::where('file_path', 'like', '%' . $fileName)->first();
+
+        if ($existingDocument) {
+            // Si le fichier existe déjà, on renvoie le document existant
+            return response()->json([
+                'message' => 'Le document existe déjà.',
+                'file_url' => asset('storage/' . $existingDocument->file_path)
+            ], 200);
+        }
+
+        // Si le document n'existe pas, on le stocke
+        $filePath = 'documents/' . $fileName;
+        $file->storeAs('documents', $fileName, 'public');
+
+        // Enregistrer uniquement le chemin du fichier en base de données
+        $document = new Document();
+        $document->file_path = $filePath;
+        $document->save();
+
+        return response()->json([
+            'message' => 'Fichier uploadé avec succès',
+            'file_url' => asset('storage/' . $document->file_path)
+        ], 200);
+    } catch (\Exception $e) {
+        return response()->json(['error' => 'Erreur lors de l\'upload', 'details' => $e->getMessage()], 500);
+    }
+}
+
+public function downloadDocumentWithQr($documentId)
+{
+    try {
+        // Récupérer le document de la base de données
+        $document = Document::findOrFail($documentId);
+
+        // Récupérer le chemin du fichier original
+        $filePath = storage_path('app/public/' . $document->file_path);
+
+        if (!file_exists($filePath)) {
+            return response()->json(['error' => 'Le fichier n\'existe pas.'], 404);
+        }
+
+        // Générer l'URL de vérification (ou toute autre URL que tu veux dans le QR Code)
+        $verificationUrl = 'https://verification-platform.com';
+
+        // Générer le QR Code
+        $qrCode = new QrCode($verificationUrl);
+        $qrCode->writeFile(storage_path('app/public/qr_code.png')); // Sauvegarder le QR code en tant qu'image
+
+        // Ajouter le QR Code au fichier PDF original
+        $pdfFilePath = $this->addQrCodeToPdfWithWatermarker($filePath, storage_path('app/public/qr_code.png'));
+
+        // Renvoi du fichier PDF modifié avec le QR Code ajouté
+        return response()->download($pdfFilePath, 'document_with_qr.pdf');
+    } catch (\Exception $e) {
+        return response()->json(['error' => 'Erreur lors du téléchargement du fichier PDF.'], 500);
+    }
+}
+
+private function addQrCodeToPdfWithWatermarker($filePath, $qrCode)
+{
+    // Créer une instance de FPDI (qui étend FPDF)
+    $pdf = new Fpdi();
+    
+    // Ajouter une page
+    $pdf->AddPage();
+    
+    // Charger le fichier PDF existant
+    $pdf->setSourceFile($filePath);
+    
+    // Importer la première page du PDF
+    $tplIdx = $pdf->importPage(1);
+    
+    // Utiliser le modèle de la première page
+    $pdf->useTemplate($tplIdx);
+    
+    // Convertir le QR Code (base64) en image
+    $qrImage = imagecreatefromstring(base64_decode($qrCode));
+    
+    // Sauvegarder le QR Code en image
+    $qrCodePath = 'qr_code.png';
+    imagepng($qrImage, storage_path('app/public/' . $qrCodePath));
+
+    // Ajouter l'image du QR Code sur le PDF (en haut à droite)
+    $pdf->Image(storage_path('app/public/' . $qrCodePath), 180, 10, 30); // Positionner en haut à droite
+
+    // Sauvegarder le fichier PDF avec le QR Code ajouté
+    $modifiedPdfPath = 'documents/modified_document_with_qr.pdf';
+
+    // Utiliser la méthode Output() de FPDF pour générer le fichier PDF
+    $pdf->Output('F', storage_path('app/public/' . $modifiedPdfPath));
+
+    return storage_path('app/public/' . $modifiedPdfPath);
+}
 
 }

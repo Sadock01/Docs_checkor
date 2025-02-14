@@ -7,9 +7,13 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "binarystash/pdf-watermarker": "^1.1",
+        "fpdf/fpdf": "^1.86",
         "laravel/framework": "^11.31",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.9",
+        "setasign/fpdi": "^2.6",
+        "simplesoftwareio/simple-qrcode": "~4",
         "spatie/laravel-permission": "^6.10"
     },
     "require-dev": {
@@ -26,6 +30,7 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
+            
         }
     },
     "autoload-dev": {
@@ -69,5 +74,11 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": {
+        "packagist": {
+            "type": "composer",
+            "url": "https://packagist.org"
+        }
+    }
 }
