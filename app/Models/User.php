@@ -67,4 +67,9 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Type::class);
     }
+
+    public function documentHistories()
+    {
+        return $this->hasMany(DocumentHistory::class);
+    }
 }

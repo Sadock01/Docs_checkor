@@ -13,6 +13,10 @@ class Document extends Model
     protected $fillable = ['identifier', 'description', 'hash','type_id','user_id',];
 
     // Dans le modèle Document
+    public function histories()
+    {
+        return $this->hasMany(DocumentHistory::class);
+    }
 public function type()
 {
     return $this->belongsTo(Type::class);

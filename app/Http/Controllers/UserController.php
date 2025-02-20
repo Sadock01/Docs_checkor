@@ -51,6 +51,7 @@ class UserController extends Controller
 
     public function store(UserRequest $request)
     {
+        dd("je suis ici");
         // La validation se fera automatiquement ici
         try {
             $user = User::create([
@@ -66,7 +67,7 @@ class UserController extends Controller
 
             return response()->json([
                 'status_code' => 201,
-                'status_message' => 'Utilisateur ajouté avec succès.',
+                'message' => 'Utilisateur ajouté avec succès.',
                 'user' => [
                     'id' => $user->id,
                     'firstname' => $user->firstname,
@@ -119,7 +120,7 @@ class UserController extends Controller
 
             return response()->json([
                 'status_code' => 200,
-                'status_message' => 'Utilisateur mis à jour avec succès.',
+                'message' => 'Utilisateur mis à jour avec succès.',
                 'data' => $user,
             ]);
         } catch (Exception $e) {

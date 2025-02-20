@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('documents', function (Blueprint $table) {
-            $table->string('file_path')->nullable()->after('id'); // Chemin d'accès au fichier
+        Schema::table('document_user', function (Blueprint $table) {
+            $table->dropColumn(['old_values', 'new_values']);
         });
     }
 
@@ -21,8 +21,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('documents', function (Blueprint $table) {
-            $table->dropColumn('file_path');
+        Schema::table('document_user', function (Blueprint $table) {
+            $table->json('old_values')->nullable()->after('user_id');
+            $table->json('new_values')->nullable()->after('old_values');
+
         });
     }
 };

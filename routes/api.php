@@ -17,8 +17,8 @@ Route::post('documents/create', [DocumentController::class, 'store']);
 
     // Retourner les collaborateurs créés
     Route::get('users', [UserController::class, 'index']);
-    Route::post('users/create', [UserController::class, 'store']);
-    Route::put('users/edit/user{id}', [UserController::class, 'update']);
+    Route::post('/users/create', [UserController::class, 'store']);
+    Route::put('users/edit/user/{id}', [UserController::class, 'update']);
 
     // Retourner les types aux utilisateurs connectés
     Route::post('types/create', [TypeController::class, 'store']);
@@ -35,8 +35,9 @@ Route::post('documents/create', [DocumentController::class, 'store']);
     Route::patch('/users/{id}/deactivate', [UserController::class, 'deactivate'])->name('users.deactivate');
     Route::patch('/users/{id}/status', [UserController::class, 'updateStatus'])->name('users.updateStatus');
 
-  
-
+  // Route pour l'upload d'un document
+Route::get('dashboard/reports', [DocumentController::class, 'showAllHistory']);
+    Route::get('dashboard/history', [DocumentController::class, 'showAllHistory']);
 Route::get('dashboard/recent-verifications', [DocumentController::class, 'getVerificationHistory']);
 Route::get('dashboard/stats', [DocumentController::class, 'statisticsByDay']);
 Route::get('dashboard/total-verifications', [DocumentController::class, 'totalVerifications']);
@@ -47,6 +48,10 @@ Route::get('verifications/stats', [DocumentController::class, 'getVerificationSt
 });
 
 // Routes publiques
+Route::post('/uploadDocument', [DocumentController::class, 'uploadDocument']);
+
+// Route pour télécharger un document avec le QR code
+Route::get('downloadDocumentWithQr/document{Id}', [DocumentController::class, 'downloadDocumentWithQr']);
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('types', [TypeController::class, 'index']); 
