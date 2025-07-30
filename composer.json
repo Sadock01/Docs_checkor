@@ -12,6 +12,7 @@
         "laravel/framework": "^11.31",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.9",
+        "phpoffice/phpspreadsheet": "^4.5",
         "setasign/fpdi": "^2.6",
         "simplesoftwareio/simple-qrcode": "~4",
         "spatie/laravel-permission": "^6.10"

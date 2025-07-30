@@ -2,16 +2,17 @@
 
 namespace App\Http\Controllers;
 
-
+use Illuminate\Support\Facades\Storage;
 use App\Models\Document;
-
+use App\Models\Type;
+use Illuminate\Support\Facades\Http;
 use App\Http\Requests\DocumentRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Verification;
 use App\Models\DocumentHistory;
 use setasign\Fpdi\Fpdi;
-;
+
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 
@@ -95,45 +96,116 @@ class DocumentController extends Controller
 
 
 
-    public function store(DocumentRequest $request)
-    {
+   public function store(DocumentRequest $request)
+{
+    try {
+        $document = Document::create([
+            'identifier' => $request->input('identifier'),
+            'description' => $request->input('description'),
+            'hash' => hash('sha256', $request->input('identifier')),
+            'type_id' => $request->type_id,
+            'beneficiaire' => $request->input('beneficiaire'),
+            'date_information' => $request->input('date_information'),
+            
+        ]);
 
-        try {
-            $document = Document::create([
-                'identifier' => $request->input('identifier'),
-                'description' => $request->input('description'),
-                'hash' => hash('sha256', $request->input('identifier')), // Génération automatique du hash
-                'type_id' => $request->type_id,
+        $document->users()->attach(Auth::id());
 
-            ]);
-
-            $document->users()->attach(Auth::id());
-
-            $document = Document::select(
+        $document = Document::select(
                 'documents.id',
                 'documents.identifier',
                 'documents.description',
                 'documents.type_id',
+                'documents.beneficiaire',
+                'documents.date_information',
+                'documents.informations_complementaires',
                 'types.name as type_name'
             )
-                ->join('types', 'documents.type_id', '=', 'types.id')
-                ->where('documents.id', $document->id)
-                ->first();
+            ->join('types', 'documents.type_id', '=', 'types.id')
+            ->where('documents.id', $document->id)
+            ->first();
 
-            return response()->json([
-                'status_code' => 200,
-                'message' => 'Document creé avec succès!',
-                'data' => $document
-            ]);
-        } catch (Exception $e) {
-
-            return response()->json([
-                'statut_code' => 401,
-                'message' => 'Erreur survenue lors de la création du document',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Document créé avec succès !',
+            'data' => $document
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Erreur survenue lors de la création du document',
+            'error' => $e->getMessage()
+        ]);
     }
+}
+
+public function storeAutomatic(Request $request)
+{
+    try {
+        $request->validate([
+            'file' => 'required|file|mimes:pdf',
+            'identifier' => 'required|string|unique:documents,identifier',
+        ]);
+
+        // 1. Envoyer le PDF au microservice FastAPI
+        $response = Http::attach(
+            'file',
+            file_get_contents($request->file('file')),
+            $request->file('file')->getClientOriginalName()
+        )->post('http://127.0.0.1:8001/extract-entities');
+
+        if (!$response->successful()) {
+            return response()->json([
+                'status_code' => 500,
+                'message' => 'Erreur de communication avec le service d’extraction',
+                'error' => $response->body()
+            ]);
+        }
+
+        $data = $response->json();
+        $entities = $data['entities'] ?? [];
+
+        // 2. Récupérer les entités
+        $beneficiaire = $entities['beneficiaire'][0] ?? null;
+        $descriptionParts = $entities['description'] ?? [];
+        $description = implode(" ", $descriptionParts);
+        $typeLabel = $entities['type_certificat'][0] ?? 'Inconnu';
+
+        // 3. Enregistrer ou retrouver le type automatiquement
+       $type = Type::where('name', $typeLabel)->first();
+
+if (!$type) {
+    $type = Type::create([
+        'name' => $typeLabel,
+        'description' => 'Type auto-extrait depuis document',
+    ]);
+}
+
+
+        // 4. Créer le document
+        $document = Document::create([
+            'identifier' => $request->identifier,
+            'description' => $description,
+            'hash' => hash('sha256', $request->identifier),
+            'type_id' => $type->id,
+            'beneficiaire' => $beneficiaire,
+        ]);
+
+        $document->users()->attach(Auth::id());
+
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Document créé automatiquement avec succès',
+            'data' => $document->load('type')  // pour inclure le nom du type dans la réponse
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Erreur lors de la création automatique du document',
+            'error' => $e->getMessage()
+        ]);
+    }
+}
 
     public function update(DocumentRequest $request, $id)
     {
@@ -194,157 +266,70 @@ class DocumentController extends Controller
     }
 
 
-    public function verifyDocument(Request $request)
-    {
-        // Valider les données envoyées par le front
-        $request->validate([
-            'identifier' => 'required|string',
-        ]);
+   
 
-        // Récupérer l'identifiant envoyé
-        $identifier = $request->input('identifier');
 
-        // Vérifier si le document existe dans la base de données
-        $document = Document::where('identifier', $identifier)->first();
 
-        if ($document) {
-            // La vérification réussit (success: true)
-            $status = 'Authentique'; // Statut basé sur le succès de la vérification
+    
 
-            // Enregistrer la vérification dans la table `verifications`
-            $verification = Verification::create([
-                'identifier' => $document->identifier,
-                'verification_date' => now(), // Date et heure actuelles
-                'status' => $status, // Statut basé sur le succès de la vérification
-            ]);
+   
+    public function showHistory($documentId)
+{
+    try {
+        // Charger l'historique du document avec l'utilisateur
+        $history = DocumentHistory::where('document_id', $documentId)
+            ->with('user')
+            ->orderBy('modified_at', 'asc') // du plus ancien au plus récent
+            ->get();
 
-            // Retourner la description du document et le statut de la vérification
+        if ($history->isEmpty()) {
             return response()->json([
-                'success' => true,
-                'data' => [
-                    'description' => $document->description,
-                    'status' => $verification->status,
-                ],
-            ], 200);
-        } else {
-            // La vérification échoue (success: false)
-            $status = 'Frauduleux'; // Statut basé sur l'échec de la vérification
-
-            // Enregistrer la vérification dans la table `verifications`
-            $verification = Verification::create([
-                'identifier' => $identifier,  // Aucun document associé
-                'verification_date' => now(), // Date et heure actuelles
-                'status' => $status, // Statut basé sur l'échec de la vérification
-            ]);
-
-            // Retourner un message d'erreur si le document n'existe pas
-            return response()->json([
-                'success' => false,
-                'message' => 'Le document avec cet identifiant n\'existe pas.',
-                'data' => [
-                    'status' => $verification->status,
-                ],
+                'status_code' => 404,
+                'message' => 'Aucun historique trouvé pour ce document.'
             ], 404);
         }
-    }
 
-    public function getVerificationHistory(Request $request)
-    {
-        try {
-            $query = Verification::query();
-            $perPage = 10;
-            $page = $request->input('page', 1);
-            $search = $request->input('search');
+        // Formater l'historique avec les changements détectés
+        $formattedHistory = $history->map(function ($entry) {
+            $old = json_decode($entry->old_values, true) ?? [];
+            $new = json_decode($entry->new_values, true) ?? [];
 
-            // Filtrer par identifiant du document si une recherche est effectuée
-            if ($search) {
-                $query->whereHas('document', function ($q) use ($search) {
-                    $q->where('identifier', 'LIKE', '%' . $search . '%');
-                });
+            $diffs = [];
+            foreach ($new as $key => $newValue) {
+                $oldValue = $old[$key] ?? null;
+
+                if ($oldValue !== $newValue) {
+                    $diffs[$key] = [
+                        'old' => $oldValue,
+                        'new' => $newValue
+                    ];
+                }
             }
 
-            // Trier par date de vérification
-            $query->orderBy('verification_date', 'desc');
+            return [
+                'modified_at' => $entry->modified_at ?? $entry->created_at,
+                'user' => [
+                    'firstname' => $entry->user->firstname ?? '',
+                    'lastname' => $entry->user->lastname ?? '',
+                    'email' => $entry->user->email ?? ''
+                ],
+                'changes' => $diffs
+            ];
+        });
 
-            // Pagination
-            $total = $query->count();
-            $result = $query->with('document') // Charger les données du document associé
-                ->offset(($page - 1) * $perPage)
-                ->limit($perPage)
-                ->get();
-
-            return response()->json([
-                'status_code' => 200,
-                'message' => 'Historique des vérifications récupéré avec succès.',
-                'current_page' => $page,
-                'last_page' => ceil($total / $perPage),
-                'data' => $result,
-            ]);
-        } catch (Exception $e) {
-            return response()->json([
-                'status_code' => 500,
-                'message' => 'Erreur lors de la récupération de l\'historique des vérifications.',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Historique du document récupéré avec succès.',
+            'data' => $formattedHistory
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Erreur lors de la récupération de l\'historique.',
+            'error' => $e->getMessage()
+        ]);
     }
-
-    public function getVerificationStats()
-    {
-        try {
-            $stats = Verification::selectRaw("DATE(verification_date) as date, status, COUNT(*) as count")
-                ->groupBy('date', 'status')
-                ->orderBy('date', 'desc')
-                ->get();
-
-            return response()->json([
-                'status_code' => 200,
-                'message' => 'Statistiques des vérifications récupérées avec succès.',
-                'data' => $stats,
-            ]);
-        } catch (Exception $e) {
-            return response()->json([
-                'status_code' => 500,
-                'message' => 'Erreur lors de la récupération des statistiques.',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }
-    // public function showHistory($documentId)
-    // {
-    //     try {
-    //         // Récupérer l'historique des modifications du document avec les utilisateurs
-    //         $history = DocumentHistory::where('document_id', $documentId)
-    //             ->with('user')  // Charger l'utilisateur avec chaque entrée d'historique
-    //             ->get();
-
-    //         if ($history->isEmpty()) {
-    //             return response()->json(['message' => 'Aucune modification trouvée pour ce document.'], 404);
-    //         }
-
-    //         // Formater les données pour inclure le nom de l'utilisateur et la date
-    //         $formattedHistory = $history->map(function ($entry) {
-    //             return [
-    //                 'modified_at' => $entry->modified_at, // La date de la modification
-    //                 'user_firstname' => $entry->user->firstname, // Prénom de l'utilisateur
-    //                 'user_lastname' => $entry->user->lastname, // Nom de l'utilisateur
-    //                 'old_values' => json_decode($entry->old_values), // Anciennes valeurs du document
-    //                 'new_values' => json_decode($entry->new_values), // Nouvelles valeurs du document
-    //             ];
-    //         });
-
-    //         return response()->json([
-    //             'status_code' => 200,
-    //             'data' => $formattedHistory
-    //         ]);
-    //     } catch (Exception $e) {
-    //         return response()->json([
-    //             'statut_code' => 500,
-    //             'message' => 'Erreur lors de la récupération de l\'historique.',
-    //             'error' => $e->getMessage()
-    //         ]);
-    //     }
-    // }
+}
 
     public function showAllHistory(Request $request)
     {
@@ -418,45 +403,7 @@ class DocumentController extends Controller
         }
     }
      
-    public function getVerificationsByStatus(Request $request)
-    {
-        try {
-            $status = $request->input('status'); // Récupérer le paramètre 'status'
-            $perPage = 10;
-            $page = $request->input('page', 1);
-
-            if (!$status) {
-                return response()->json([
-                    'status_code' => 400,
-                    'message' => 'Le paramètre "status" est requis.',
-                ], 400);
-            }
-
-            // Filtrer les vérifications par status
-            $query = Verification::where('status', $status);
-
-            // Pagination
-            $total = $query->count();
-            $result = $query->with('document') // Charger les données du document associé
-                ->offset(($page - 1) * $perPage)
-                ->limit($perPage)
-                ->get();
-
-            return response()->json([
-                'status_code' => 200,
-                'message' => 'Historique des vérifications filtré par statut récupéré avec succès.',
-                'current_page' => $page,
-                'last_page' => ceil($total / $perPage),
-                'data' => $result,
-            ]);
-        } catch (Exception $e) {
-            return response()->json([
-                'status_code' => 500,
-                'message' => 'Erreur lors de la récupération des vérifications par statut.',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }
+    
 
 
     public function statisticsLastDays($days)
@@ -474,15 +421,7 @@ class DocumentController extends Controller
         ]);
     }
 
-    public function totalVerifications()
-    {
-        $total = Verification::count();
-
-        return response()->json([
-            'success' => true,
-            'total_verifications' => $total,
-        ]);
-    }
+  
 
     public function totalDocuments()
     {
@@ -494,123 +433,6 @@ class DocumentController extends Controller
         ]);
     }
 
-    public function uploadDocument(Request $request)
-{
-    try {
-        // Vérifier si un fichier est envoyé
-        if (!$request->hasFile('file')) {
-            return response()->json(['erreur' => 'Aucun fichier trouvé'], 400);
-        }
 
-        $file = $request->file('file');
-
-        // Vérifier si c'est un PDF
-        if ($file->getClientOriginalExtension() !== 'pdf') {
-            return response()->json(['erreur' => 'Seuls les fichiers PDF sont autorisés'], 400);
-        }
-
-        // Vérifier si un identifiant de document est fourni
-        $documentId = $request->input('document_id');
-        if (!$documentId) {
-            return response()->json(['erreur' => 'L\'identifiant du document est requis'], 400);
-        }
-
-        // Vérifier si le document existe déjà dans la base de données
-        $existingDocument = Document::find($documentId);
-
-        // Si le document existe déjà, renvoyer une réponse
-        if ($existingDocument) {
-            return response()->json([
-                'message' => 'Le document existe déjà.',
-                'file_path' => asset('storage/' . $existingDocument->file_path)
-            ], 200);
-        }
-
-        // Enregistrer le fichier PDF
-        $fileName = 'document_' . $documentId . '_' . time() . '.pdf';
-        $filePath = 'documents/' . $fileName;
-        $file->storeAs('documents', $fileName, 'public');
-
-        // Enregistrer le document dans la base de données
-        $document = new Document();
-        $document->id = $documentId;  // Utilisation de 'id' si c'est la clé primaire
-        $document->file_path = $filePath;
-        $document->save();
-
-        return response()->json([
-            'message' => 'Fichier uploadé avec succès',
-            'file_path' => asset('storage/' . $document->file_path)
-        ], 200);
-    } catch (Exception $e) {
-        \Log::error('Erreur upload document: ' . $e->getMessage());
-        return response()->json(['error' => 'Erreur lors de l\'upload', 'details' => $e->getMessage()], 500);
-    }
-}
-
-
-    public function downloadDocumentWithQr($documentId)
-    {
-        try {
-            // Récupérer le document de la base de données
-            $document = Document::findOrFail($documentId);
-
-            // Récupérer le chemin du fichier original
-            $filePath = storage_path('app/public/' . $document->file_path);
-
-            if (!file_exists($filePath)) {
-                return response()->json(['error' => 'Le fichier n\'existe pas.'], 404);
-            }
-
-            // Générer l'URL de vérification (ou toute autre URL que tu veux dans le QR Code)
-            $verificationUrl = 'https://verification-platform.com';
-
-            // Générer le QR Code
-            QrCode::size(300)->generate($verificationUrl, storage_path('app/public/qr_code.png'));
-
-            // Ajouter le QR Code au fichier PDF original
-            $pdfFilePath = $this->addQrCodeToPdfWithWatermarker($filePath, storage_path('app/public/qr_code.png'));
-
-            // Renvoi du fichier PDF modifié avec le QR Code ajouté
-            return response()->download($pdfFilePath, 'document_with_qr.pdf');
-        } catch (Exception $e) {
-            return response()->json(['error' => 'Erreur lors du téléchargement du fichier PDF.'], 500);
-        }
-    }
-
-    private function addQrCodeToPdfWithWatermarker($filePath, $qrCode)
-    {
-        // Créer une instance de FPDI (qui étend FPDF)
-        $pdf = new Fpdi();
-
-        // Ajouter une page
-        $pdf->AddPage();
-
-        // Charger le fichier PDF existant
-        $pdf->setSourceFile($filePath);
-
-        // Importer la première page du PDF
-        $tplIdx = $pdf->importPage(1);
-
-        // Utiliser le modèle de la première page
-        $pdf->useTemplate($tplIdx);
-
-        // Convertir le QR Code (base64) en image
-        $qrImage = imagecreatefromstring(base64_decode($qrCode));
-
-        // Sauvegarder le QR Code en image
-        $qrCodePath = 'qr_code.png';
-        imagepng($qrImage, storage_path('app/public/' . $qrCodePath));
-
-        // Ajouter l'image du QR Code sur le PDF (en haut à droite)
-        $pdf->Image(storage_path('app/public/' . $qrCodePath), 180, 10, 30); // Positionner en haut à droite
-
-        // Sauvegarder le fichier PDF avec le QR Code ajouté
-        $modifiedPdfPath = 'documents/modified_document_with_qr.pdf';
-
-        // Utiliser la méthode Output() de FPDF pour générer le fichier PDF
-        $pdf->Output('F', storage_path('app/public/' . $modifiedPdfPath));
-
-        return storage_path('app/public/' . $modifiedPdfPath);
-    }
 
 }

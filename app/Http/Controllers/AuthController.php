@@ -7,6 +7,7 @@ use App\Http\Requests\LogUserRequest;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use Laravel\Sanctum\PersonalAccessToken;
 use Exception;
 
 class AuthController extends Controller
@@ -71,11 +72,35 @@ class AuthController extends Controller
     }
 
     public function logout(Request $request)
-    {
-        $request->user()->currentAccessToken()->delete();
-        return [
-            'status_code' => 200,
-            'message' => 'Utilisateur déconnecté avec succès.'
-        ];
+{
+    // Récupération du token depuis l'en-tête Authorization
+    $authHeader = $request->header('Authorization');
+
+    if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+        return response()->json([
+            'status_code' => 400,
+            'message' => 'Token non fourni ou invalide.'
+        ], 400);
     }
+
+    $tokenValue = substr($authHeader, 7); // Supprime 'Bearer '
+
+    // Recherche du token dans la base de données
+    $token = PersonalAccessToken::findToken($tokenValue);
+
+    if (!$token) {
+        return response()->json([
+            'status_code' => 404,
+            'message' => 'Token non trouvé.'
+        ], 404);
+    }
+
+    // Suppression du token
+    $token->delete();
+
+    return response()->json([
+        'status_code' => 200,
+        'message' => 'Déconnexion réussie.'
+    ]);
+}
 }

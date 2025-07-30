@@ -10,7 +10,7 @@ class Document extends Model
 
     use HasFactory;
 
-    protected $fillable = ['identifier', 'description', 'hash','type_id','user_id',];
+    protected $fillable = ['identifier','beneficiaire', 'description', 'hash', 'date_information','informations_complementaires','type_id','user_id',];
 
     // Dans le modèle Document
     public function histories()

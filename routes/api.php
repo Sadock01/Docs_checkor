@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\UploadController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DocumentController;
@@ -11,13 +12,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // Retourner les documents créés à l'utilisateur actuellement connecté
     Route::get('documents', [DocumentController::class, 'index']);
 Route::post('documents/create', [DocumentController::class, 'store']);
+Route::post('documents/auto/create', [DocumentController::class, 'storeAutomatic']);
     Route::put('documents/edit/document/{id}', [DocumentController::class, 'update']);
     Route::get('/documents/{id}', [DocumentController::class, 'show']);
 
 
     // Retourner les collaborateurs créés
     Route::get('users', [UserController::class, 'index']);
-    Route::post('/users/create', [UserController::class, 'store']);
+    Route::post('users/create', [UserController::class, 'store']);
     Route::put('users/edit/user/{id}', [UserController::class, 'update']);
 
     // Retourner les types aux utilisateurs connectés
@@ -48,7 +50,7 @@ Route::get('verifications/stats', [DocumentController::class, 'getVerificationSt
 });
 
 // Routes publiques
-Route::post('/uploadDocument', [DocumentController::class, 'uploadDocument']);
+Route::post('/uploadDocument', [UploadController::class, 'uploadAndExtractDocuments']);
 
 // Route pour télécharger un document avec le QR code
 Route::get('downloadDocumentWithQr/document{Id}', [DocumentController::class, 'downloadDocumentWithQr']);
@@ -56,4 +58,5 @@ Route::get('downloadDocumentWithQr/document{Id}', [DocumentController::class, 'd
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('types', [TypeController::class, 'index']); 
 Route::post('documents/verify-document', [DocumentController::class, 'verifyDocument']);
+Route::post('documents/verify', [DocumentController::class, 'verify']);
 Route::post('/upload-document', [DocumentController::class, 'uploadDocument']);
