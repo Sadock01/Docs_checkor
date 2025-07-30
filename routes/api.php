@@ -13,8 +13,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('documents', [DocumentController::class, 'index']);
 Route::post('documents/create', [DocumentController::class, 'store']);
 Route::post('documents/auto/create', [DocumentController::class, 'storeAutomatic']);
+Route::post('documents/extract/create', [DocumentController::class, 'storeFromExtraction']);
     Route::put('documents/edit/document/{id}', [DocumentController::class, 'update']);
-    Route::get('/documents/{id}', [DocumentController::class, 'show']);
+    Route::get('documents/{id}', [DocumentController::class, 'show']);
 
 
     // Retourner les collaborateurs créés
@@ -39,7 +40,7 @@ Route::post('documents/auto/create', [DocumentController::class, 'storeAutomatic
 
   // Route pour l'upload d'un document
 Route::get('dashboard/reports', [DocumentController::class, 'showAllHistory']);
-    Route::get('dashboard/history', [DocumentController::class, 'showAllHistory']);
+    Route::get('dashboard/history/{id}', [DocumentController::class, 'showHistory']);
 Route::get('dashboard/recent-verifications', [DocumentController::class, 'getVerificationHistory']);
 Route::get('dashboard/stats', [DocumentController::class, 'statisticsByDay']);
 Route::get('dashboard/total-verifications', [DocumentController::class, 'totalVerifications']);

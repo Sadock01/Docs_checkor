@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use setasign\Fpdi\Fpdi;
+use Illuminate\Support\Facades\Auth;
 use App\Models\Document;
 use Illuminate\Support\Facades\Http;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
@@ -210,6 +211,7 @@ public function uploadAndExtractDocuments(Request $request)
 
         // Traitement du fichier Excel (facultatif)
         if ($excel) {
+            // dd("ici");
             $spreadsheet = IOFactory::load($excel->getPathname());
             $sheet = $spreadsheet->getActiveSheet();
             $rows = $sheet->toArray();
@@ -228,6 +230,7 @@ public function uploadAndExtractDocuments(Request $request)
                         'identifier' => $identifier
                     ]
                 ];
+                
             }
         }
 

@@ -207,6 +207,81 @@ if (!$type) {
     }
 }
 
+
+public function storeFromExtraction(Request $request)
+{
+    try {
+        // Validation minimale (tu peux l'ajuster selon le frontend)
+        $request->validate([
+            'identifier' => 'required|string|unique:documents,identifier',
+            'description' => 'required|string',
+            'type' => 'required|string',
+            'beneficiaire' => 'required|string',
+            'date_information' => 'nullable|date',
+        ]);
+
+        // Rechercher ou créer le type à partir du nom (libellé)
+        $type = Type::firstOrCreate(
+            ['name' => $request->input('type')],
+            ['description' => 'Type auto-créé depuis extraction']
+        );
+
+        // Créer le document avec les données extraites
+        $document = Document::create([
+            'identifier' => $request->input('identifier'),
+            'description' => $request->input('description'),
+            'hash' => hash('sha256', $request->input('identifier')),
+            'type_id' => $type->id,
+            'beneficiaire' => $request->input('beneficiaire'),
+            'date_information' => $request->input('date_information'),
+        ]);
+
+        // Associer l'utilisateur connecté
+        $userId = Auth::id();
+        $document->users()->attach(Auth::id());
+   DocumentHistory::create([
+            'document_id' => $document->id,
+            'user_id' => $userId,
+            'old_values' => null,
+            'new_values' => json_encode([
+                'identifier' => $document->identifier,
+                'description' => $document->description,
+                'hash' => $document->hash,
+                'type_id' => $document->type_id,
+                'beneficiaire' => $document->beneficiaire,
+                'date_information' => $document->date_information,
+            ]),
+            'modified_at' => now(),
+        ]);
+        // Retourner les infos enrichies du document
+        $document = Document::select(
+                'documents.id',
+                'documents.identifier',
+                'documents.description',
+                'documents.type_id',
+                'documents.beneficiaire',
+                'documents.date_information',
+                'documents.informations_complementaires',
+                'types.name as type_name'
+            )
+            ->join('types', 'documents.type_id', '=', 'types.id')
+            ->where('documents.id', $document->id)
+            ->first();
+
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Document extrait et enregistré avec succès',
+            'data' => $document
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Erreur lors de l’enregistrement du document extrait',
+            'error' => $e->getMessage()
+        ]);
+    }
+}
+
     public function update(DocumentRequest $request, $id)
     {
         try {
@@ -273,13 +348,12 @@ if (!$type) {
     
 
    
-    public function showHistory($documentId)
+  public function showHistory($documentId)
 {
     try {
-        // Charger l'historique du document avec l'utilisateur
         $history = DocumentHistory::where('document_id', $documentId)
             ->with('user')
-            ->orderBy('modified_at', 'asc') // du plus ancien au plus récent
+            ->orderBy('modified_at', 'asc')
             ->get();
 
         if ($history->isEmpty()) {
@@ -289,33 +363,54 @@ if (!$type) {
             ], 404);
         }
 
-        // Formater l'historique avec les changements détectés
-        $formattedHistory = $history->map(function ($entry) {
+        $formattedHistory = [];
+
+        foreach ($history as $entry) {
             $old = json_decode($entry->old_values, true) ?? [];
             $new = json_decode($entry->new_values, true) ?? [];
 
             $diffs = [];
-            foreach ($new as $key => $newValue) {
-                $oldValue = $old[$key] ?? null;
 
-                if ($oldValue !== $newValue) {
-                    $diffs[$key] = [
-                        'old' => $oldValue,
-                        'new' => $newValue
-                    ];
+            // S'il n'y a pas de old_values, c'est la création
+            if (empty($old)) {
+                $diffs = collect($new)->mapWithKeys(function ($value, $key) {
+                    return [$key => ['old' => null, 'new' => $value]];
+                })->toArray();
+
+                $formattedHistory[] = [
+                    'action' => 'Création',
+                    'modified_at' => $entry->modified_at ?? $entry->created_at,
+                    'user' => [
+                        'firstname' => $entry->user->firstname ?? '',
+                        'lastname' => $entry->user->lastname ?? '',
+                        'email' => $entry->user->email ?? ''
+                    ],
+                    'changes' => $diffs
+                ];
+            } else {
+                // Sinon, c’est une modification
+                foreach ($new as $key => $newValue) {
+                    $oldValue = $old[$key] ?? null;
+                    if ($oldValue !== $newValue) {
+                        $diffs[$key] = [
+                            'old' => $oldValue,
+                            'new' => $newValue
+                        ];
+                    }
                 }
-            }
 
-            return [
-                'modified_at' => $entry->modified_at ?? $entry->created_at,
-                'user' => [
-                    'firstname' => $entry->user->firstname ?? '',
-                    'lastname' => $entry->user->lastname ?? '',
-                    'email' => $entry->user->email ?? ''
-                ],
-                'changes' => $diffs
-            ];
-        });
+                $formattedHistory[] = [
+                    'action' => 'Modification',
+                    'modified_at' => $entry->modified_at ?? $entry->created_at,
+                    'user' => [
+                        'firstname' => $entry->user->firstname ?? '',
+                        'lastname' => $entry->user->lastname ?? '',
+                        'email' => $entry->user->email ?? ''
+                    ],
+                    'changes' => $diffs
+                ];
+            }
+        }
 
         return response()->json([
             'status_code' => 200,
