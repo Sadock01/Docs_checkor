@@ -103,4 +103,26 @@ class AuthController extends Controller
         'message' => 'Déconnexion réussie.'
     ]);
 }
+
+
+public function me(Request $request)
+{
+    $user = Auth::user();
+
+    if (!$user) {
+        return response()->json([
+            'status_code' => 401,
+            'message' => 'Utilisateur non authentifié'
+        ], 401);
+    }
+
+    return response()->json([
+        'status_code' => 200,
+        'message' => 'Détails de l’utilisateur connecté',
+        'data' => $user
+    ]);
+}
+
+
+
 }

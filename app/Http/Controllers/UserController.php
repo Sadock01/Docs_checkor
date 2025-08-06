@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+
 use App\Http\Requests\UserRequest;
 use Illuminate\Http\Request;
 use App\Models\User;
+use App\Models\Role;
 use Exception;
 
 class UserController extends Controller
@@ -13,15 +15,16 @@ class UserController extends Controller
     {
         try {
             $query = User::query();
-            $perPage = 5;
-            $page = $request->input('page', 5);
+            $perPage = 10;
+            $page = $request->input('page', 1);
             $search = $request->input('search');
 
             if ($search) {
                 $query->whereRaw("identifier LIKE ?", ['%' . $search . '%']);
             }
 
-            $total = $query->count();
+           $total = $query->count();
+
             $result = $query->offset(($page - 1) * $perPage)->limit($perPage)->get();
 
             return response()->json([
@@ -38,7 +41,7 @@ class UserController extends Controller
                         'status' => $user->status,
                         'role_id' => $user->role_id,
                     ];
-                }),
+                }),  
             ], 200);
         } catch (Exception $e) {
             return response()->json([
@@ -49,42 +52,72 @@ class UserController extends Controller
         }
     }
 
-    public function store(UserRequest $request)
-    {
-        dd("je suis ici");
-        // La validation se fera automatiquement ici
-        try {
-            $user = User::create([
-                'firstname' => $request->firstname,
-                'lastname' => $request->lastname,
-                'email' => $request->email,
-                'password' => bcrypt($request->password),
-                'status' => true,
-                'role_id' => $request->role_id,
-            ]);
+   
 
-            $user->assignRole($request->role_id);
+public function store(Request $request)
+{
+    try {
 
+      $validated = $request->validate([
+            'firstname' => 'required|string|max:255',
+            'lastname' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|min:8',
+            'role_id' => 'required|exists:roles,id',
+        ], [
+            
+            'firstname.required' => 'Le prénom est requis.',
+            'lastname.required' => 'Le nom est requis.',
+            'email.required' => 'L\'email est requis.',
+            'email.email' => 'L\'email doit être une adresse valide.',
+            'email.unique' => 'Cet email est déjà utilisé.',
+            'password.required' => 'Le mot de passe est requis.',
+            'password.min' => 'Le mot de passe doit contenir au moins 8 caractères.',
+            'role_id.required' => 'Le rôle est requis.',
+            'role_id.exists' => 'Le rôle sélectionné est invalide.',
+        ]);
+        $user = User::create([
+            'firstname' => $request->firstname,
+            'lastname' => $request->lastname,
+            'email' => $request->email,
+            'password' => $request->password,
+            'status' => true,
+            'role_id' => $request->role_id, // Tu peux stocker l’ID à part si tu veux
+        ]);
+
+        // Trouver le rôle par ID et assigner par son nom
+        $role = Role::find($request->role_id);
+        if (!$role) {
             return response()->json([
-                'status_code' => 201,
-                'message' => 'Utilisateur ajouté avec succès.',
-                'user' => [
-                    'id' => $user->id,
-                    'firstname' => $user->firstname,
-                    'lastname' => $user->lastname,
-                    'email' => $user->email,
-                    'status' => $user->status,
-                    'role_id' => $user->role_id,
-                ],
-            ], 201);
-        } catch (Exception $e) {
-            return response()->json([
-                'status_code' => 401,
-                'message' => 'Erreur survenue lors de la création de l\'utilisateur.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'status_code' => 404,
+                'message' => 'Rôle introuvable.',
+            ], 404);
         }
+
+        $user->assignRole($role->name); // assignRole attend un nom
+
+        return response()->json([
+            'status_code' => 201,
+            'message' => 'Utilisateur ajouté avec succès.',
+            'user' => [
+                'id' => $user->id,
+                'firstname' => $user->firstname,
+                'lastname' => $user->lastname,
+                'email' => $user->email,
+                'status' => $user->status,
+                'role_id' => $user->role_id,
+                'role_name' => $role->name,
+            ],
+        ], 201);
+    } catch (Exception $e) {
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Erreur survenue lors de la création de l\'utilisateur.',
+            'error' => $e->getMessage(),
+        ], 500);
     }
+}
+
 
     public function update(Request $request, $id)
     {

@@ -19,29 +19,43 @@ class UserRequest extends FormRequest
      */
     public function rules()
     {
-        // Vérifie si c'est une requête de mise à jour ou de création
-        if ($this->isMethod('post')) {
-            // Règles pour la création (store)
-            return [
-                'firstname' => 'required|string|max:255',
+         if ($this->isMethod('post')) {
+            return $this->storeRules();
+        }
+
+        if ($this->isMethod('put')) {
+            return $this->updateRules();
+        }
+        return [];
+    }
+ private function storeRules()
+    {
+        return [
+             'firstname' => 'required|string|max:255',
                 'lastname' => 'required|string|max:255',
-                'email' => 'required|email|unique:users',
+                
                 'password' => 'required|min:8',
                 'role_id' => 'required|exists:roles,id',
-            ];
-        } elseif ($this->isMethod('put') || $this->isMethod('patch')) {
-            return [
-                'firstname' => 'sometimes|required|string|max:255',
+                'email' => 'required|email|unique:users',
+            
+        ];
+    }
+
+
+    private function updateRules()
+    {
+        return [
+            'firstname' => 'sometimes|required|string|max:255',
                 'lastname' => 'sometimes|required|string|max:255',
                 'email' => 'sometimes|required|email|unique:users,email,' . $this->user->id,
                 'password' => 'sometimes|min:8',
                 'status' => 'sometimes|boolean',
                 'role_id' => 'sometimes|required|exists:roles,id',
-            ];
-        }
-        return [];
+        ];
     }
 
+
+   
     /**
      * Messages de validation personnalisés.
      */

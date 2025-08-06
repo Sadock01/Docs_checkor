@@ -18,7 +18,7 @@ return new class extends Migration
             $table->longText('description'); 
             $table->string('hash')->unique(); 
             $table->text('informations_complementaires')->nullable();
-            $table->date('date_information')->nullable();
+            $table->String('date_information')->nullable();
             $table->unsignedBigInteger('type_id');
             $table->foreign('type_id')->references('id')->on('types');
             $table->timestamps();
