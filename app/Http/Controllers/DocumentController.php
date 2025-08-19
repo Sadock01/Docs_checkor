@@ -29,6 +29,9 @@ class DocumentController extends Controller
                 'documents.id',
                 'documents.identifier',
                 'documents.description',
+                'documents.beneficiaire',
+                'documents.date_information',
+                'documents.informations_complementaires',
                 'documents.type_id',
                 'types.name as type_name' // Récupérer le nom du type
             )
@@ -73,6 +76,9 @@ class DocumentController extends Controller
                 'documents.id',
                 'documents.identifier',
                 'documents.description',
+                'documents.beneficiaire',
+                'documents.date_information',
+                'documents.informations_complementaires',
                 'documents.type_id',
                 'types.name as type_name' // Récupérer le nom du type
             )
@@ -88,7 +94,7 @@ class DocumentController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'statut_code' => 404,
-                'message' => 'Document introuvable.',
+                'message' => 'Document introuvable.'.$e->getMessage(),
                 'error' => $e->getMessage()
             ], 404);
         }
@@ -96,21 +102,29 @@ class DocumentController extends Controller
 
 
 
-   public function store(DocumentRequest $request)
+public function store(Request $request)
 {
     try {
+        // 1️⃣ On récupère ou crée le type à partir du nom
+        $type = Type::firstOrCreate(
+            ['name' => $request->input('type_name')],
+            ['name' => $request->input('type_name')]
+        );
+
+        // 2️⃣ Création du document
         $document = Document::create([
             'identifier' => $request->input('identifier'),
             'description' => $request->input('description'),
             'hash' => hash('sha256', $request->input('identifier')),
-            'type_id' => $request->type_id,
+            'type_id' => $type->id, // ✅ on utilise l'ID du type créé/trouvé
             'beneficiaire' => $request->input('beneficiaire'),
             'date_information' => $request->input('date_information'),
-            
         ]);
 
+        // Associer le document à l’utilisateur connecté
         $document->users()->attach(Auth::id());
 
+        // 3️⃣ Récupérer avec infos type
         $document = Document::select(
                 'documents.id',
                 'documents.identifier',
@@ -130,6 +144,7 @@ class DocumentController extends Controller
             'message' => 'Document créé avec succès !',
             'data' => $document
         ]);
+
     } catch (Exception $e) {
         return response()->json([
             'status_code' => 500,
@@ -138,6 +153,7 @@ class DocumentController extends Controller
         ]);
     }
 }
+
 
 public function storeAutomatic(Request $request)
 {

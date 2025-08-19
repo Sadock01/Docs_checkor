@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Models\Verification;
 use App\Models\Document;
@@ -64,19 +64,304 @@ class VerificationController extends Controller
         }
     }
 
-    public function verify(Request $request)
+//     public function verify(Request $request)
+// {
+//     $request->validate([
+//         'identifier' => 'required|string',
+//         'file' => 'required|file|mimes:pdf|max:5120',
+//     ]);
+
+//     // 1. Upload temporaire
+//     $file = $request->file('file');
+//     $tempPath = $file->storeAs('temp_uploads', $file->getClientOriginalName());
+
+//     try {
+//         // 2. Appel au microservice FastAPI
+//         $response = Http::attach(
+//             'file',
+//             Storage::get($tempPath),
+//             $file->getClientOriginalName()
+//         )->post('http://127.0.0.1:8001/extract-entities');
+
+//         if ($response->failed()) {
+//             return response()->json([
+//                 'status' => 'error',
+//                 'message' => 'Erreur lors de l\'extraction du fichier.',
+//                 'details' => $response->body()
+//             ], 500);
+//         }
+
+//         $entities = $response->json('entities');
+
+//         // 3. Récupération du document original
+//         $document = Document::with('type')->where('identifier', $request->identifier)->first();
+
+//         // Si aucun document trouvé
+//         if (!$document) {
+//             $status = 'Frauduleux';
+
+//             Verification::create([
+//                 'identifier' => $request->identifier,
+//                 'verification_date' => now(),
+//                 'status' => $status,
+//             ]);
+
+//             return response()->json([
+//                 'success' => false,
+//                 'status' => 'invalid',
+//                   'message' => "Aucun document trouvé avec l'identifiant : {$request->identifier}",
+//             ], 404);
+//         }
+
+//         // 4. Comparaison
+//         $errors = [];
+
+//         if (!in_array($document->beneficiaire, $entities['beneficiaire'] ?? [])) {
+//             $errors['beneficiaire'] = 'Le bénéficiaire ne correspond pas.';
+//         }
+
+//         $extractedDescription = implode(' ', $entities['description'] ?? []);
+//         if ($document->description !== $extractedDescription) {
+//             $errors['description'] = 'La description ne correspond pas.';
+//         }
+
+//         if (!in_array($document->type->name, $entities['type_certificat'] ?? [])) {
+//             $errors['type_certificat'] = 'Le type de certificat ne correspond pas.';
+//         }
+
+//         // 5. Résultat
+//         if (count($errors)) {
+//             Verification::create([
+//                 'identifier' => $document->identifier,
+//                 'verification_date' => now(),
+//                 'status' => 'Frauduleux',
+//             ]);
+
+//             return response()->json([
+//                 'success' => false,
+//                 'status' => 'not_authentic',
+//                 'message' => 'Document non authentique.',
+//                 'reasons' => $errors,
+//             ], 200);
+//         }
+
+//         Verification::create([
+//             'identifier' => $document->identifier,
+//             'verification_date' => now(),
+//             'status' => 'Authentique',
+//         ]);
+
+//         return response()->json([
+//             'success' => true,
+//             'status' => 'authentic',
+//             'message' => 'Le document est authentique.',
+//             'document' => [
+//                 'identifier' => $document->identifier,
+//                 'beneficiaire' => $document->beneficiaire,
+//                 'description' => $document->description,
+//                 'type_certificat' => $document->type->name,
+//             ],
+//         ], 200);
+
+//     } finally {
+//         // Supprimer le fichier temporaire
+//         Storage::delete($tempPath);
+//     }
+// }
+
+
+// public function verify(Request $request)
+// {
+//     // Validation : le fichier devient optionnel
+//     $request->validate([
+//         'identifier' => 'required|string',
+//         'file' => 'nullable|file|mimes:pdf|max:5120',
+//     ]);
+
+//     // Chercher le document dans la base
+//     $document = Document::with('type')->where('identifier', $request->identifier)->first();
+
+//     // Si aucun document trouvé
+//     if (!$document) {
+//         Verification::create([
+//             'identifier' => $request->identifier,
+//             'verification_date' => now(),
+//             'status' => 'Frauduleux',
+//         ]);
+
+//         return response()->json([
+//             'success' => false,
+//             'status' => 'invalid',
+//             'message' => "Aucun document trouvé avec l'identifiant : {$request->identifier}",
+//             'entered_identifier' => $request->identifier
+//         ], 404);
+//     }
+
+//     // Si aucun fichier, on fait juste un check basique
+//     if (!$request->hasFile('file')) {
+//         Verification::create([
+//             'identifier' => $document->identifier,
+//             'verification_date' => now(),
+//             'status' => 'Authentique',
+//         ]);
+
+//         return response()->json([
+//             'success' => true,
+//             'status' => 'mi-authentic',
+//             'message' => 'Le document est authentique (vérification par identifiant uniquement).',
+//             'document' => [
+//                 'identifier' => $document->identifier,
+//                 'beneficiaire' => $document->beneficiaire,
+//                 'description' => $document->description,
+//                 'type certificat' => $document->type->name,
+//             ],
+//         ], 200);
+//     }
+
+//     // Si fichier fourni → on garde ton code actuel
+//     $file = $request->file('file');
+//     $tempPath = $file->storeAs('temp_uploads', $file->getClientOriginalName());
+
+//     try {
+//         // Appel à FastAPI
+//         $response = Http::attach(
+//             'file',
+//             Storage::get($tempPath),
+//             $file->getClientOriginalName()
+//         )->post('http://127.0.0.1:8001/extract-entities');
+
+//         if ($response->failed()) {
+//             return response()->json([
+//                 'status' => 'error',
+//                 'message' => 'Erreur lors de l\'extraction du fichier.',
+//                 'details' => $response->body()
+//             ], 500);
+//         }
+
+//         $entities = $response->json('entities');
+// if (empty($entities) || (
+//     empty($entities['beneficiaire']) &&
+//     empty($entities['description']) &&
+//     empty($entities['type_certificat'])
+// )) {
+//     return response()->json([
+//         'success' => false,
+//         'status' => 'extraction_failed',
+//         'message' => 'Le document n\'a pas pu être lu. Les données extraites sont vides.'
+//     ], 422); // 422 = données non exploitables
+// }
+//         // Comparaison
+//         $errors = [];
+
+//         if (!in_array($document->beneficiaire, $entities['beneficiaire'] ?? [])) {
+//             $errors['beneficiaire'] = 'Le bénéficiaire ne correspond pas.';
+//         }
+
+//         $extractedDescription = implode(' ', $entities['description'] ?? []);
+//         if ($document->description !== $extractedDescription) {
+//             $errors['description'] = 'La description ne correspond pas.';
+//         }
+
+//         if (!in_array($document->type->name, $entities['type_certificat'] ?? [])) {
+//             $errors['type certificat'] = 'Le type de certificat ne correspond pas.';
+//         }
+
+//         if (count($errors)) {
+//             Verification::create([
+//                 'identifier' => $document->identifier,
+//                 'verification_date' => now(),
+//                 'status' => 'Frauduleux',
+//             ]);
+
+//             return response()->json([
+//                 'success' => false,
+//                 'status' => 'not_authentic',
+//                 'message' => 'Document non authentique.',
+//                 'reasons' => $errors,
+//             ], 200);
+//         }
+
+//         Verification::create([
+//             'identifier' => $document->identifier,
+//             'verification_date' => now(),
+//             'status' => 'Authentique',
+//         ]);
+
+//         return response()->json([
+//             'success' => true,
+//             'status' => 'authentic',
+//             'message' => 'Le document est authentique.',
+//             'document' => [
+//                 'identifier' => $document->identifier,
+//                 'beneficiaire' => $document->beneficiaire,
+//                 'description' => $document->description,
+//                 'type_certificat' => $document->type->name,
+//             ],
+//         ], 200);
+
+//     } finally {
+//         Storage::delete($tempPath ?? null);
+//     }
+// }
+
+
+
+public function verify(Request $request)
 {
+    // Validation
     $request->validate([
         'identifier' => 'required|string',
-        'file' => 'required|file|mimes:pdf|max:5120',
+        'file' => 'nullable|file|mimes:pdf|max:5120',
     ]);
 
-    // 1. Upload temporaire
+    
+    $document = Document::with('type')->where('identifier', $request->identifier)->first();
+
+    if (!$document) {
+        Verification::create([
+            'identifier' => $request->identifier,
+            'verification_date' => now(),
+            'status' => 'Frauduleux',
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'status' => 'invalid',
+            'message' => "Aucun document trouvé avec l'identifiant : {$request->identifier}",
+            'entered_identifier' => $request->identifier
+        ], 404);
+    }
+
+    // 2. Vérification par identifiant uniquement
+    if (!$request->hasFile('file')) {
+        $verification = Verification::create([
+            'identifier' => $document->identifier,
+            'verification_date' => now(),
+            'status' => 'Authentique',
+        ]);
+
+        $formattedDate = Carbon::parse($verification->verification_date)
+            ->locale('fr')
+            ->translatedFormat('d F Y à H\hi');
+
+        return response()->json([
+            'success' => true,
+            'status' => 'mi-authentic',
+            'message' => "Document vérifié le {$formattedDate} — statut : valide (par identifiant uniquement).",
+            'document' => [
+                'identifier' => $document->identifier,
+                'beneficiaire' => $document->beneficiaire,
+                'description' => $document->description,
+                'type_certificat' => $document->type->name,
+            ],
+        ], 200);
+    }
+
+    // 3. Vérification avec fichier
     $file = $request->file('file');
     $tempPath = $file->storeAs('temp_uploads', $file->getClientOriginalName());
 
     try {
-        // 2. Appel au microservice FastAPI
         $response = Http::attach(
             'file',
             Storage::get($tempPath),
@@ -93,27 +378,20 @@ class VerificationController extends Controller
 
         $entities = $response->json('entities');
 
-        // 3. Récupération du document original
-        $document = Document::with('type')->where('identifier', $request->identifier)->first();
-
-        // Si aucun document trouvé
-        if (!$document) {
-            $status = 'Frauduleux';
-
-            Verification::create([
-                'identifier' => $request->identifier,
-                'verification_date' => now(),
-                'status' => $status,
-            ]);
-
+        // Si extraction vide
+        if (empty($entities) || (
+            empty($entities['beneficiaire']) &&
+            empty($entities['description']) &&
+            empty($entities['type_certificat'])
+        )) {
             return response()->json([
                 'success' => false,
-                'status' => 'invalid',
-                'message' => 'Aucun document trouvé avec cet identifiant.',
-            ], 404);
+                'status' => 'extraction_failed',
+                'message' => 'Le document n\'a pas pu être lu. Les données extraites sont vides.'
+            ], 422);
         }
 
-        // 4. Comparaison
+        // Comparaison
         $errors = [];
 
         if (!in_array($document->beneficiaire, $entities['beneficiaire'] ?? [])) {
@@ -121,6 +399,7 @@ class VerificationController extends Controller
         }
 
         $extractedDescription = implode(' ', $entities['description'] ?? []);
+        // dd($extractedDescription, $document->description);
         if ($document->description !== $extractedDescription) {
             $errors['description'] = 'La description ne correspond pas.';
         }
@@ -129,7 +408,6 @@ class VerificationController extends Controller
             $errors['type_certificat'] = 'Le type de certificat ne correspond pas.';
         }
 
-        // 5. Résultat
         if (count($errors)) {
             Verification::create([
                 'identifier' => $document->identifier,
@@ -145,16 +423,21 @@ class VerificationController extends Controller
             ], 200);
         }
 
-        Verification::create([
+        // 4. Document authentique
+        $verification = Verification::create([
             'identifier' => $document->identifier,
             'verification_date' => now(),
             'status' => 'Authentique',
         ]);
 
+        $formattedDate = Carbon::parse($verification->verification_date)
+            ->locale('fr')
+            ->translatedFormat('d F Y à H\hi');
+
         return response()->json([
             'success' => true,
             'status' => 'authentic',
-            'message' => 'Le document est authentique.',
+            'message' => "Document vérifié le {$formattedDate} — statut : valide.",
             'document' => [
                 'identifier' => $document->identifier,
                 'beneficiaire' => $document->beneficiaire,
@@ -164,8 +447,7 @@ class VerificationController extends Controller
         ], 200);
 
     } finally {
-        // Supprimer le fichier temporaire
-        Storage::delete($tempPath);
+        Storage::delete($tempPath ?? null);
     }
 }
 
@@ -173,7 +455,7 @@ public function getVerificationHistory(Request $request)
     {
         try {
             $query = Verification::query();
-            $perPage = 10;
+            $perPage = 11;
             $page = $request->input('page', 1);
             $search = $request->input('search');
 

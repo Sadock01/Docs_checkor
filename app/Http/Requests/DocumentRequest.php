@@ -36,8 +36,8 @@ class DocumentRequest extends FormRequest
     {
         return [
             'identifier' => 'required|string|unique:documents',
-            'description' => 'required|string|max:200',
-            'type_id'=> 'required|exists:types,id',
+            'description' => 'required|string',
+            // 'type_id'=> 'required|exists:types,id',
             
         ];
     }
@@ -47,8 +47,8 @@ class DocumentRequest extends FormRequest
     {
         return [
             'identifier' => 'required|string',
-            'description' => 'required|string|max:200',
-            'type_id' => 'required|exists:types,id', 
+            // 'description' => 'required|string|max:200',
+            // 'type_id' => 'required|exists:types,id', 
            
         ];
     }
@@ -60,7 +60,7 @@ class DocumentRequest extends FormRequest
             'identifier.required' => 'L\'identifiant du document est obligatoire.',
             'identifier.unique' => 'Cet identifiant est déjà utilisé.',
             'description' => 'La description pour ce document est requise',
-            'type_id.required' => 'Ce document doit avoir un type'
+            // 'type_id.required' => 'Ce document doit avoir un type'
         ]; 
     }
 }
