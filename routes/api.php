@@ -53,7 +53,7 @@ Route::get('/me', [AuthController::class, 'me']);
 
 // Routes publiques
 Route::post('/uploadDocument', [UploadController::class, 'uploadAndExtractDocuments']);
-
+Route::post('/uploadExcel', [UploadController::class, 'uploadExcelfile']);
 // Route pour télécharger un document avec le QR code
 Route::get('downloadDocumentWithQr/document{Id}', [DocumentController::class, 'downloadDocumentWithQr']);
 

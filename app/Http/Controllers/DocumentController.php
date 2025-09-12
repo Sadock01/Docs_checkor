@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\Storage;
 use App\Models\Document;
+use App\Models\ActivitiesLog;
 use App\Models\Type;
 use Illuminate\Support\Facades\Http;
 use App\Http\Requests\DocumentRequest;
@@ -11,6 +12,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Verification;
 use App\Models\DocumentHistory;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
 use setasign\Fpdi\Fpdi;
 
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
@@ -100,59 +103,179 @@ class DocumentController extends Controller
         }
     }
 
-
-
 public function store(Request $request)
 {
-    try {
-        // 1️⃣ On récupère ou crée le type à partir du nom
-        $type = Type::firstOrCreate(
-            ['name' => $request->input('type_name')],
-            ['name' => $request->input('type_name')]
-        );
+    $results = [
+        "success" => [],
+        "failed" => []
+    ];
 
-        // 2️⃣ Création du document
-        $document = Document::create([
-            'identifier' => $request->input('identifier'),
-            'description' => $request->input('description'),
-            'hash' => hash('sha256', $request->input('identifier')),
-            'type_id' => $type->id, // ✅ on utilise l'ID du type créé/trouvé
-            'beneficiaire' => $request->input('beneficiaire'),
-            'date_information' => $request->input('date_information'),
-        ]);
+    $documents = $request->input('documents', []);
 
-        // Associer le document à l’utilisateur connecté
-        $document->users()->attach(Auth::id());
+    foreach ((array) $documents as $docData) {
+        $identifier = $docData['identifier'] ?? null;
 
-        // 3️⃣ Récupérer avec infos type
-        $document = Document::select(
-                'documents.id',
-                'documents.identifier',
-                'documents.description',
-                'documents.type_id',
-                'documents.beneficiaire',
-                'documents.date_information',
-                'documents.informations_complementaires',
-                'types.name as type_name'
-            )
-            ->join('types', 'documents.type_id', '=', 'types.id')
-            ->where('documents.id', $document->id)
-            ->first();
+        if (!$identifier) {
+            $results['failed'][] = [
+                "identifier" => "inconnu",
+                "message" => "Identifiant manquant."
+            ];
+            continue;
+        }
 
-        return response()->json([
-            'status_code' => 200,
-            'message' => 'Document créé avec succès !',
-            'data' => $document
-        ]);
+        try {
+            DB::beginTransaction();
 
-    } catch (Exception $e) {
-        return response()->json([
-            'status_code' => 500,
-            'message' => 'Erreur survenue lors de la création du document',
-            'error' => $e->getMessage()
-        ]);
+            // Vérifier doublon rapide
+            if (Document::where('identifier', $identifier)->exists()) {
+                $msg = "Doublon détecté : identifiant déjà utilisé.";
+                $results['failed'][] = [
+                    "identifier" => $identifier,
+                    "message" => $msg
+                ];
+
+                $user = Auth::user();
+                ActivitiesLog::create([
+                    "identifier" => $identifier,
+                    "status" => "failed",
+                    "message" => $msg,
+                    "user_id" => $user ? $user->id : null,
+                    "firstname" => $user ? $user->firstname : null,
+                    "lastname" => $user ? $user->lastname : null,
+                ]);
+
+                DB::rollBack();
+                continue;
+            }
+
+            // 1️⃣ type
+            $typeName = $docData['type_name'] ?? 'Autre';
+            $type = Type::firstOrCreate(
+                ['name' => $typeName],
+                ['name' => $typeName]
+            );
+
+            // 2️⃣ création
+            $document = Document::create([
+                'identifier' => $identifier,
+                'description' => $docData['description'] ?? null,
+                'hash' => hash('sha256', $identifier),
+                'type_id' => $type->id,
+                'beneficiaire' => $docData['beneficiaire'] ?? null,
+                'date_information' => $docData['date_information'] ?? null,
+            ]);
+
+            $user = Auth::user();
+            if ($user) {
+                $document->users()->attach($user->id);
+            }
+
+            $results['success'][] = [
+                "identifier" => $identifier,
+                "message" => "Document enregistré avec succès."
+            ];
+
+            ActivitiesLog::create([
+                "identifier" => $identifier,
+                "status" => "success",
+                "message" => "Document enregistré avec succès.",
+                "user_id" => $user ? $user->id : null,
+                "firstname" => $user ? $user->firstname : null,
+                "lastname" => $user ? $user->lastname : null,
+            ]);
+
+            DB::commit();
+
+        } catch (QueryException $qe) {
+            DB::rollBack();
+            $msg = 'Erreur base de données : ' . $qe->getMessage();
+            $results['failed'][] = [
+                "identifier" => $identifier,
+                "message" => $msg
+            ];
+            $user = Auth::user();
+            DocumentHistory::create([
+                "identifier" => $identifier,
+                "status" => "failed",
+                "message" => $msg,
+                "user_id" => $user ? $user->id : null,
+                "firstname" => $user ? $user->firstname : null,
+                "lastname" => $user ? $user->lastname : null,
+            ]);
+        } catch (Exception $e) {
+            DB::rollBack();
+            $msg = 'Erreur : ' . $e->getMessage();
+            $results['failed'][] = [
+                "identifier" => $identifier,
+                "message" => $msg
+            ];
+            $user = Auth::user();
+            DocumentHistory::create([
+                "identifier" => $identifier,
+                "status" => "failed",
+                "message" => $msg,
+                "user_id" => $user ? $user->id : null,
+                "firstname" => $user ? $user->firstname : null,
+                "lastname" => $user ? $user->lastname : null,
+            ]);
+        }
     }
+
+    return response()->json($results);
 }
+
+
+// public function store(Request $request)
+// {
+//     try {
+//         // 1️⃣ On récupère ou crée le type à partir du nom
+//         $type = Type::firstOrCreate(
+//             ['name' => $request->input('type_name')],
+//             ['name' => $request->input('type_name')]
+//         );
+
+//         // 2️⃣ Création du document
+//         $document = Document::create([
+//             'identifier' => $request->input('identifier'),
+//             'description' => $request->input('description'),
+//             'hash' => hash('sha256', $request->input('identifier')),
+//             'type_id' => $type->id, // ✅ on utilise l'ID du type créé/trouvé
+//             'beneficiaire' => $request->input('beneficiaire'),
+//             'date_information' => $request->input('date_information'),
+//         ]);
+
+//         // Associer le document à l’utilisateur connecté
+//         $document->users()->attach(Auth::id());
+
+//         // 3️⃣ Récupérer avec infos type
+//         $document = Document::select(
+//                 'documents.id',
+//                 'documents.identifier',
+//                 'documents.description',
+//                 'documents.type_id',
+//                 'documents.beneficiaire',
+//                 'documents.date_information',
+//                 'documents.informations_complementaires',
+//                 'types.name as type_name'
+//             )
+//             ->join('types', 'documents.type_id', '=', 'types.id')
+//             ->where('documents.id', $document->id)
+//             ->first();
+
+//         return response()->json([
+//             'status_code' => 200,
+//             'message' => 'Document créé avec succès !',
+//             'data' => $document
+//         ]);
+
+//     } catch (Exception $e) {
+//         return response()->json([
+//             'status_code' => 500,
+//             'message' => 'Erreur survenue lors de la création du document',
+//             'error' => $e->getMessage()
+//         ]);
+//     }
+// }
 
 
 public function storeAutomatic(Request $request)

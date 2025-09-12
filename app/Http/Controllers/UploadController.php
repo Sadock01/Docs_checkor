@@ -266,109 +266,112 @@ class UploadController extends Controller
 // }
 
 
-// public function uploadAndExtractDocuments(Request $request)
-// {
-//     try {
-//         $request->validate([
-//             'files' => 'nullable', // tableau de fichiers PDF
-//             'excel_file' => 'nullable|file|mimes:xlsx,xls'
-//         ]);
+public function uploadExcelfile(Request $request)
+{
+    try {
+        $request->validate([
+            'files' => 'nullable', // tableau de fichiers PDF
+            'excel_file' => 'nullable|file|mimes:xlsx,xls'
+        ]);
 
-//         $files = $request->file('files');
-//         $identifiers = $request->input('identifiers', []);
-//         $excel = $request->file('excel_file');
+        $files = $request->file('files');
+        $identifiers = $request->input('identifiers', []);
+        $excel = $request->file('excel_file');
 
-//         if (!is_array($files) && $files !== null) {
-//             $files = [$files];
-//         }
+        if (!is_array($files) && $files !== null) {
+            $files = [$files];
+        }
 
-//         if (!is_array($identifiers)) {
-//             $identifiers = [$identifiers];
-//         }
+        if (!is_array($identifiers)) {
+            $identifiers = [$identifiers];
+        }
 
-//         $results = [];
+        $results = [];
 
-//         // Traitement des fichiers PDF
-//         if ($files) {
-//             foreach ($files as $index => $file) {
-//                 if (!$file->isValid() || $file->getClientOriginalExtension() !== 'pdf') {
-//                     $results[] = [
-//                         'filename' => $file->getClientOriginalName(),
-//                         'status' => 'error',
-//                         'message' => 'Fichier invalide ou non-PDF'
-//                     ];
-//                     continue;
-//                 }
+        // Traitement des fichiers PDF
+        if ($files) {
+            foreach ($files as $index => $file) {
+                if (!$file->isValid() || $file->getClientOriginalExtension() !== 'pdf') {
+                    $results[] = [
+                        'filename' => $file->getClientOriginalName(),
+                        'status' => 'error',
+                        'message' => 'Fichier invalide ou non-PDF'
+                    ];
+                    continue;
+                }
 
-//                 $response = Http::attach(
-//                     'file',
-//                     file_get_contents($file->getRealPath()),
-//                     $file->getClientOriginalName()
-//                 )->post('http://127.0.0.1:8001/extract-entities');
+                $response = Http::attach(
+                    'file',
+                    file_get_contents($file->getRealPath()),
+                    $file->getClientOriginalName()
+                )->post('http://127.0.0.1:8001/extract-entities');
 
-//                 if ($response->successful()) {
-//                     $data = $response->json();
+                if ($response->successful()) {
+                    $data = $response->json();
 
-//                     $resultItem = [
-//                         'filename' => $file->getClientOriginalName(),
-//                         'status' => 'success',
-//                         'entities' => $data['entities'] ?? [],
-//                     ];
+                    $resultItem = [
+                        'filename' => $file->getClientOriginalName(),
+                        'status' => 'success',
+                        'entities' => $data['entities'] ?? [],
+                    ];
 
-//                     if (isset($identifiers[$index]) && !empty($identifiers[$index])) {
-//                         $resultItem['identifier'] = $identifiers[$index];
-//                     }
+                    if (isset($identifiers[$index]) && !empty($identifiers[$index])) {
+                        $resultItem['identifier'] = $identifiers[$index];
+                    }
 
-//                     $results[] = $resultItem;
-//                 } else {
-//                     $results[] = [
-//                         'filename' => $file->getClientOriginalName(),
-//                         'status' => 'error',
-//                         'message' => 'Erreur FastAPI : ' . $response->body()
-//                     ];
-//                 }
-//             }
-//         }
+                    $results[] = $resultItem;
+                } else {
+                    $results[] = [
+                        'filename' => $file->getClientOriginalName(),
+                        'status' => 'error',
+                        'message' => 'Erreur FastAPI : ' . $response->body()
+                    ];
+                }
+            }
+        }
 
-//         // Traitement du fichier Excel (facultatif)
-//         if ($excel) {
-//             // dd("ici");
-//             $spreadsheet = IOFactory::load($excel->getPathname());
-//             $sheet = $spreadsheet->getActiveSheet();
-//             $rows = $sheet->toArray();
+        // Traitement du fichier Excel (facultatif)
+        if ($excel) {
+            // dd("ici");
+            $spreadsheet = IOFactory::load($excel->getPathname());
+            $sheet = $spreadsheet->getActiveSheet();
+            $rows = $sheet->toArray();
 
-//             foreach ($rows as $index => $row) {
-//                 if ($index === 0) continue; // Ignorer l'en-tête
+            foreach ($rows as $index => $row) {
+                if ($index === 0) continue; // Ignorer l'en-tête
 
-//                 [$filename, $type, $description, $identifier] = $row;
+                // [$filename, $type, $description, $identifier] = $row;
+                  [$filename, $type, $description, $identifier, $beneficiaire, $date_information] = array_pad($row, 6, null);
 
-//                 $results[] = [
-//                     'filename' => $filename,
-//                     'status' => 'from_excel',
-//                     'entities' => [
-//                         'type_document' => $type,
-//                         'description' => $description,
-//                         'identifier' => $identifier
-//                     ]
-//                 ];
+                $results[] = [
+                    'filename' => $filename,
+                    'status' => 'from_excel',
+                    'entities' => [
+                        'type_document' => $type,
+                        'description' => $description,
+                        'identifier' => $identifier,
+                        'beneficiaire' => $beneficiaire,
+                        'date_information' => $date_information ?: "Aucune date mentionnée",
+                    ]
+                ];
                 
-//             }
-//         }
+            }
+        }
 
-//         return response()->json([
-//             'status_code' => 200,
-//             'message' => 'Extraction terminée',
-//             'data' => $results
-//         ]);
-//     } catch (\Exception $e) {
-//         \Log::error('Erreur extraction fichiers : ' . $e->getMessage());
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Extraction terminée',
+            'data' => $results
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Erreur extraction fichiers : ' . $e->getMessage());
 
-//         return response()->json([
-//             'status_code' => 500,
-//             'message' => 'Erreur lors du traitement',
-//             'error' => $e->getMessage()
-//         ]);
-//     }}
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Erreur lors du traitement',
+            'error' => $e->getMessage()
+        ]);
+    }}
 
 
 public function uploadAndExtractDocuments(Request $request)
