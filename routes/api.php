@@ -59,7 +59,7 @@ Route::get('downloadDocumentWithQr/document{Id}', [DocumentController::class, 'd
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('types', [TypeController::class, 'index']); 
-Route::post('documents/verify-document', [DocumentController::class, 'verifyDocument']);
+Route::post('documents/verify-document', [VerificationController::class, 'verifyDoc']);
 Route::post('documents/verify', [VerificationController::class, 'verify']);
 Route::post('/upload-document', [DocumentController::class, 'uploadDocument']);
 
