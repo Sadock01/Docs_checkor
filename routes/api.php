@@ -63,3 +63,15 @@ Route::post('documents/verify-document', [VerificationController::class, 'verify
 Route::post('documents/verify', [VerificationController::class, 'verify']);
 Route::post('/upload-document', [DocumentController::class, 'uploadDocument']);
 
+
+
+Route::get('/test-full', function() {
+    return response()->json([
+        'status_code' => 200,
+        'message' => 'API fonctionne parfaitement !',
+        'data' => [
+            'time' => now()->toDateTimeString(),
+            'environment' => env('APP_ENV'),
+        ]
+    ], 200);
+});
