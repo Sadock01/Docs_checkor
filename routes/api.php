@@ -13,6 +13,7 @@ use App\Http\Controllers\RoleController;
 Route::middleware('auth:sanctum')->group(function () {
     // Retourner les documents créés à l'utilisateur actuellement connecté
     Route::get('documents', [DocumentController::class, 'index']);
+    Route::post('documents/add', [DocumentController::class, 'create']);
 Route::post('documents/create', [DocumentController::class, 'store']);
 Route::post('documents/auto/create', [DocumentController::class, 'storeAutomatic']);
 Route::post('documents/extract/create', [DocumentController::class, 'storeFromExtraction']);
