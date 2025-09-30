@@ -10,6 +10,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\TypeController;
 use App\Http\Controllers\RoleController;
 
+
 Route::middleware('auth:sanctum')->group(function () {
     // Retourner les documents créés à l'utilisateur actuellement connecté
     Route::get('documents', [DocumentController::class, 'index']);
@@ -19,7 +20,7 @@ Route::post('documents/auto/create', [DocumentController::class, 'storeAutomatic
 Route::post('documents/extract/create', [DocumentController::class, 'storeFromExtraction']);
     Route::put('documents/edit/document/{id}', [DocumentController::class, 'update']);
     Route::get('documents/{id}', [DocumentController::class, 'show']);
-
+  
 
     // Retourner les collaborateurs créés
     Route::get('users', [UserController::class, 'index']);
@@ -64,6 +65,7 @@ Route::post('documents/verify-document', [VerificationController::class, 'verify
 Route::post('documents/verify', [VerificationController::class, 'verify']);
 Route::post('/upload-document', [DocumentController::class, 'uploadDocument']);
 
+Route::get('activities', [DocumentController::class, 'getActivities']);
 
 
 Route::get('/test-full', function() {

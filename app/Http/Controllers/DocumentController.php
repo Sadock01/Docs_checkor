@@ -655,7 +655,17 @@ public function storeFromExtraction(Request $request)
         ]);
     }
 
-  
+    public function getActivities(Request $request)
+    {
+        // Récupération avec pagination (10 par page)
+        $activities = ActivitiesLog::with('user')->paginate(10);
+
+        // Retourner en JSON
+        return response()->json([
+            'status' => 'success',
+            'data' => $activities
+        ]);
+    }
 
     public function totalDocuments()
     {
