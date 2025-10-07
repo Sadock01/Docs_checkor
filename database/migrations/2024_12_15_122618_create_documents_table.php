@@ -21,6 +21,7 @@ return new class extends Migration
             $table->String('date_information')->nullable();
             $table->unsignedBigInteger('type_id');
             $table->foreign('type_id')->references('id')->on('types');
+             $table->softDeletes();
             $table->timestamps();
         });
     }

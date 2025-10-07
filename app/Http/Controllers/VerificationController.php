@@ -418,7 +418,7 @@ public function verify(Request $request)
             return response()->json([
                 'success' => false,
                 'status' => 'not_authentic',
-                'message' => 'Document non authentique.',
+                'message' => 'Document non trouvé.',
                 'reasons' => $errors,
             ], 200);
         }
@@ -451,6 +451,146 @@ public function verify(Request $request)
     }
 }
 
+// public function verifyDoc(Request $request)
+// {
+//     // 🔹 Validation des entrées
+//     $request->validate([
+//         'identifier' => 'nullable|string',
+//         'beneficiaire' => 'nullable|string',
+//         'type_name' => 'nullable|string',
+//         'date_information' => 'nullable|string',
+//         'file' => 'nullable|file|mimes:pdf|max:5120',
+//     ]);
+
+//     // 🔹 Données saisies par l'utilisateur
+//     $enteredData = [
+//         'identifier' => $request->get('identifier'),
+//         'beneficiaire' => $request->get('beneficiaire'),
+//         'type_name' => $request->get('type_name'),
+//         'date_information' => $request->get('date_information'),
+//     ];
+
+//     // 🔹 Si fichier PDF fourni, extraire les données
+//     if ($request->hasFile('file')) {
+//         $file = $request->file('file');
+//         $tempPath = $file->storeAs('temp_uploads', $file->getClientOriginalName());
+
+//         try {
+//             $response = Http::attach(
+//                 'file',
+//                 Storage::get($tempPath),
+//                 $file->getClientOriginalName()
+//             )->post('http://127.0.0.1:8001/extract-entities');
+
+//             if ($response->failed()) {
+//                 return response()->json([
+//                     'success' => false,
+//                     'status' => 'error',
+//                     'message' => 'Erreur lors de l\'extraction du fichier.',
+//                     'details' => $response->body(),
+//                 ], 500);
+//             }
+
+//             $entities = $response->json('entities');
+
+//             // On remplace enteredData par les valeurs extraites si disponibles
+//             $enteredData = [
+//                 'identifier' => $entities['identifier'][0] ?? $enteredData['identifier'],
+//                 'beneficiaire' => $entities['beneficiaire'][0] ?? $enteredData['beneficiaire'],
+//                 'type_name' => $entities['type_certificat'][0] ?? $enteredData['type_name'],
+//                 'date_information' => $entities['date_information'][0] ?? $enteredData['date_information'],
+//             ];
+
+//         } finally {
+//             Storage::delete($tempPath ?? null);
+//         }
+//     }
+
+//     // 🔹 Requête pour trouver le document correspondant
+//     $query = Document::with('type');
+
+//     if (!empty($enteredData['identifier'])) {
+//         $query->where('identifier', $enteredData['identifier']);
+//     }
+//     if (!empty($enteredData['beneficiaire'])) {
+//         $query->where('beneficiaire', 'like', '%' . $enteredData['beneficiaire'] . '%');
+//     }
+//     if (!empty($enteredData['date_information'])) {
+//         $query->where('date_information', $enteredData['date_information']);
+//     }
+//     if (!empty($enteredData['type_name'])) {
+//         $query->whereHas('type', function ($q) use ($enteredData) {
+//             $q->where('name', $enteredData['type_name']);
+//         });
+//     }
+
+//     $document = Document::with('type')
+//     ->where('identifier', $enteredData['identifier'])
+//     ->first();
+
+
+//     // 🔹 Si aucun document trouvé
+//     if (!$document) {
+//         return response()->json([
+//             'success' => false,
+//             'status' => 'not_found',
+//             'message' => "Aucun document correspondant trouvé avec les informations fournies.",
+//             'entered_or_extracted_data' => $enteredData,
+//         ], 404);
+//     }
+
+//     // 🔹 Vérification des correspondances
+//     $isMatching = true;
+//     $mismatches = [];
+
+//     // Identifier strict
+//     if ($enteredData['identifier'] && $enteredData['identifier'] !== $document->identifier) {
+//         $isMatching = false;
+//         $mismatches['identifier'] = 'L’identifiant ne correspond pas.';
+//     }
+
+//     // Bénéficiaire partiel et insensible à la casse
+//     if (!empty($enteredData['beneficiaire'])) {
+//         $enteredBenef = strtolower($enteredData['beneficiaire']);
+//         $docBenef = strtolower($document->beneficiaire);
+
+//         if (strpos($docBenef, $enteredBenef) === false) {
+//             $isMatching = false;
+//             $mismatches['beneficiaire'] = 'Le bénéficiaire ne correspond pas.';
+//         }
+//     }
+
+//     // Date stricte
+//     if ($enteredData['date_information'] && $enteredData['date_information'] !== $document->date_information) {
+//         $isMatching = false;
+//         $mismatches['date_information'] = 'La date ne correspond pas.';
+//     }
+
+//     // Type stricte
+//     if ($enteredData['type_name'] && $enteredData['type_name'] !== $document->type->name) {
+//         $isMatching = false;
+//         $mismatches['type_name'] = 'Le type de certificat ne correspond pas.';
+//     }
+
+//     // 🔹 Retour JSON
+//     return response()->json([
+//         'success' => $isMatching,
+//         'status' => $isMatching ? 'authentic' : 'mismatch',
+//         'message' => $isMatching
+//             ? "Le document a été trouvé."
+//             : "Les informations saisies/extraites ne correspondent pas totalement au document.",
+//         'entered_or_extracted_data' => $enteredData,
+//         'document' => [
+//             'identifier' => $document->identifier,
+//             'beneficiaire' => $document->beneficiaire,
+//             'description' => $document->description,
+//             'date_information' => $document->date_information,
+//             'type_certificat' => $document->type->name,
+//         ],
+//         'mismatches' => $mismatches,
+//     ], 200);
+// }
+
 public function verifyDoc(Request $request)
 {
     // 🔹 Validation des entrées
@@ -464,9 +604,9 @@ public function verifyDoc(Request $request)
 
     // 🔹 Données saisies par l'utilisateur
     $enteredData = [
-        'identifier' => $request->get('identifier'),
-        'beneficiaire' => $request->get('beneficiaire'),
-        'type_name' => $request->get('type_name'),
+        'identifier'       => $request->get('identifier'),
+        'beneficiaire'     => $request->get('beneficiaire'),
+        'type_name'        => $request->get('type_name'),
         'date_information' => $request->get('date_information'),
     ];
 
@@ -485,7 +625,7 @@ public function verifyDoc(Request $request)
             if ($response->failed()) {
                 return response()->json([
                     'success' => false,
-                    'status' => 'error',
+                    'status'  => 'error',
                     'message' => 'Erreur lors de l\'extraction du fichier.',
                     'details' => $response->body(),
                 ], 500);
@@ -493,11 +633,11 @@ public function verifyDoc(Request $request)
 
             $entities = $response->json('entities');
 
-            // On remplace enteredData par les valeurs extraites si disponibles
+            // Écraser enteredData avec les valeurs extraites si présentes
             $enteredData = [
-                'identifier' => $entities['identifier'][0] ?? $enteredData['identifier'],
-                'beneficiaire' => $entities['beneficiaire'][0] ?? $enteredData['beneficiaire'],
-                'type_name' => $entities['type_certificat'][0] ?? $enteredData['type_name'],
+                'identifier'       => $entities['identifier'][0] ?? $enteredData['identifier'],
+                'beneficiaire'     => $entities['beneficiaire'][0] ?? $enteredData['beneficiaire'],
+                'type_name'        => $entities['type_certificat'][0] ?? $enteredData['type_name'],
                 'date_information' => $entities['date_information'][0] ?? $enteredData['date_information'],
             ];
 
@@ -506,32 +646,16 @@ public function verifyDoc(Request $request)
         }
     }
 
-    // 🔹 Requête pour trouver le document correspondant
-    $query = Document::with('type');
+    // 🔹 Recherche du document UNIQUEMENT par identifiant
+    $document = Document::with('type')
+        ->where('identifier', $enteredData['identifier'])
+        ->first();
 
-    if (!empty($enteredData['identifier'])) {
-        $query->where('identifier', $enteredData['identifier']);
-    }
-    if (!empty($enteredData['beneficiaire'])) {
-        $query->where('beneficiaire', 'like', '%' . $enteredData['beneficiaire'] . '%');
-    }
-    if (!empty($enteredData['date_information'])) {
-        $query->where('date_information', $enteredData['date_information']);
-    }
-    if (!empty($enteredData['type_name'])) {
-        $query->whereHas('type', function ($q) use ($enteredData) {
-            $q->where('name', $enteredData['type_name']);
-        });
-    }
-
-    $document = $query->first();
-
-    // 🔹 Si aucun document trouvé
     if (!$document) {
         return response()->json([
             'success' => false,
-            'status' => 'not_found',
-            'message' => "Aucun document correspondant trouvé avec les informations fournies.",
+            'status'  => 'not_found',
+            'message' => "Aucun document correspondant trouvé avec l'identifiant fourni.",
             'entered_or_extracted_data' => $enteredData,
         ], 404);
     }
@@ -540,53 +664,74 @@ public function verifyDoc(Request $request)
     $isMatching = true;
     $mismatches = [];
 
-    // Identifier strict
-    if ($enteredData['identifier'] && $enteredData['identifier'] !== $document->identifier) {
+    // Identifiant strict (sécurité, mais normalement déjà filtré)
+    if (!empty($enteredData['identifier']) 
+        && $enteredData['identifier'] !== $document->identifier) {
         $isMatching = false;
         $mismatches['identifier'] = 'L’identifiant ne correspond pas.';
     }
 
-    // Bénéficiaire partiel et insensible à la casse
-    if (!empty($enteredData['beneficiaire'])) {
-        $enteredBenef = strtolower($enteredData['beneficiaire']);
-        $docBenef = strtolower($document->beneficiaire);
+// Helper : découpe en mots (lettres/chiffres) et normalise en minuscules
+function tokenize(string $text): array {
+    $text = mb_strtolower(trim($text));
+    // sépare sur tout ce qui n'est pas lettre/chiffre (Unicode)
+    $tokens = preg_split('/[^\p{L}\p{N}]+/u', $text);
+    return array_values(array_filter($tokens, fn($t) => $t !== ''));
+}
 
-        if (strpos($docBenef, $enteredBenef) === false) {
-            $isMatching = false;
-            $mismatches['beneficiaire'] = 'Le bénéficiaire ne correspond pas.';
+// Bénéficiaire : chaque mot entré doit exister comme mot entier dans le bénéficiaire en base
+if (!empty($enteredData['beneficiaire'])) {
+    $enteredTokens = tokenize($enteredData['beneficiaire']);
+    $docTokens     = tokenize($document->beneficiaire);
+
+    $foundAll = true;
+    foreach ($enteredTokens as $token) {
+        if (!in_array($token, $docTokens, true)) {
+            $foundAll = false;
+            break;
         }
     }
 
-    // Date stricte
-    if ($enteredData['date_information'] && $enteredData['date_information'] !== $document->date_information) {
+    if (!$foundAll) {
         $isMatching = false;
-        $mismatches['date_information'] = 'La date ne correspond pas.';
+        $mismatches['beneficiaire'] = 'Le bénéficiaire ne correspond pas.';
     }
+}
 
-    // Type stricte
-    if ($enteredData['type_name'] && $enteredData['type_name'] !== $document->type->name) {
+
+
+if (empty($enteredData['date_information']) || $enteredData['date_information'] !== $document->date_information) {
+    $isMatching = false;
+    $mismatches['date_information'] = 'La date est manquante ou incorrecte.';
+}
+
+
+    // Type strict
+    if (!empty($enteredData['type_name']) 
+        && $enteredData['type_name'] !== $document->type->name) {
         $isMatching = false;
         $mismatches['type_name'] = 'Le type de certificat ne correspond pas.';
     }
 
     // 🔹 Retour JSON
     return response()->json([
-        'success' => $isMatching,
-        'status' => $isMatching ? 'authentic' : 'mismatch',
+        'success' => false,
+        'status'  => $isMatching ? 'authentic' : 'mismatch',
         'message' => $isMatching
             ? "Le document est authentique."
-            : "Les informations saisies/extraites ne correspondent pas totalement au document.",
+            : "Le document a été trouvé mais certaines informations ne correspondent pas.",
         'entered_or_extracted_data' => $enteredData,
         'document' => [
-            'identifier' => $document->identifier,
-            'beneficiaire' => $document->beneficiaire,
-            'description' => $document->description,
+            'identifier'       => $document->identifier,
+            'beneficiaire'     => $document->beneficiaire,
+            'description'      => $document->description,
             'date_information' => $document->date_information,
-            'type_certificat' => $document->type->name,
+            'type_certificat'  => $document->type->name,
         ],
         'mismatches' => $mismatches,
     ], 200);
 }
+
 
 
 

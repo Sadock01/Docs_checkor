@@ -15,7 +15,8 @@ return new class extends Migration
             $table->id();
             $table->string('name')->unique();
             $table->text('description')->nullable();
-        
+ $table->boolean('is_used')->default(false); 
+            $table->softDeletes(); // ✅ ajout du champ deleted_at pour soft delete
             $table->timestamps();
         });
     }

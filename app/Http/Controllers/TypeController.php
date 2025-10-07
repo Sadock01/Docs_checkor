@@ -78,32 +78,35 @@ class TypeController extends Controller
         }
     }
 
-    public function update(Request $request, $id)
+  public function update(Request $request, $id)
 {
     try {
-        // Étape 1 : Validation des données d'entrée
         $validated = $request->validate([
-            'name' => 'sometimes|string|unique:types,name,' . $id, // Exclure l'ID actuel pour l'unicité
+            'name' => 'sometimes|string|unique:types,name,' . $id,
             'description' => 'nullable|string',
         ]);
 
-        // Étape 2 : Récupération du type à mettre à jour
         $type = Type::findOrFail($id);
 
-        // Étape 3 : Mise à jour des données
+        // Vérifier s'il est déjà utilisé par des documents
+        if ($type->documents()->exists()) {
+            return response()->json([
+                'status_code' => 403,
+                'message' => 'Ce type est déjà utilisé par un document et ne peut pas être modifié.',
+            ], 403);
+        }
+
         $type->update([
             'name' => $validated['name'] ?? $type->name,
             'description' => $validated['description'] ?? $type->description,
         ]);
 
-        // Étape 4 : Réponse en cas de succès
         return response()->json([
             'status_code' => 200,
             'message' => 'Le type a été mis à jour avec succès.',
             'data' => $type,
         ]);
     } catch (Exception $e) {
-        // Étape 5 : Gestion des erreurs
         return response()->json([
             'status_code' => 500,
             'message' => 'Une erreur est survenue lors de la mise à jour du type.',
@@ -111,5 +114,35 @@ class TypeController extends Controller
         ], 500);
     }
 }
+
+public function destroy($id)
+{
+    try {
+        $type = Type::findOrFail($id);
+
+        // Vérifier s'il est utilisé
+        if ($type->documents()->exists()) {
+            return response()->json([
+                'status_code' => 403,
+                'message' => 'Ce type est utilisé par un document et ne peut pas être supprimé.',
+            ], 403);
+        }
+
+        // Soft delete
+        $type->delete();
+
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Le type a été supprimé (soft delete) avec succès.',
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Une erreur est survenue lors de la suppression du type.',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
+
 
 }

@@ -9,12 +9,30 @@ class Verification extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'identifier',
-        'verification_date',
-        'status',
-    ];
+  // App\Models\DocumentVerification.php
 
+protected $fillable = [
+    'ip_address',
+    'user_agent',
+    'browser',
+    'device_type',
+    'platform',
+    'via_file',
+    'entered_data',
+    'extracted_data',
+    'document_found',
+    'is_matching',
+    'mismatches',
+];
+
+ protected $casts = [
+        'via_file'      => 'boolean',
+        'document_found'=> 'boolean',
+        'is_matching'   => 'boolean',
+        'entered_data'  => 'array',     
+        'extracted_data'=> 'array',     
+        'mismatches'    => 'array',
+    ];
     // Relation avec le modèle Document
     public function document()
     {

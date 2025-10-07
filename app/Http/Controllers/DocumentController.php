@@ -103,6 +103,130 @@ class DocumentController extends Controller
         }
     }
 
+// public function store(Request $request)
+// {
+//     $results = [
+//         "success" => [],
+//         "failed" => []
+//     ];
+
+//     $documents = $request->input('documents', []);
+
+//     foreach ((array) $documents as $docData) {
+//         $identifier = $docData['identifier'] ?? null;
+
+//         if (!$identifier) {
+//             $results['failed'][] = [
+//                 "identifier" => "inconnu",
+//                 "message" => "Identifiant manquant."
+//             ];
+//             continue;
+//         }
+
+//         try {
+//             DB::beginTransaction();
+
+//             // Vérifier doublon rapide
+//             if (Document::where('identifier', $identifier)->exists()) {
+//                 $msg = "Doublon détecté : identifiant déjà utilisé.";
+//                 $results['failed'][] = [
+//                     "identifier" => $identifier,
+//                     "message" => $msg
+//                 ];
+
+//                 $user = Auth::user();
+//                 ActivitiesLog::create([
+//                     "identifier" => $identifier,
+//                     "status" => "failed",
+//                     "message" => $msg,
+//                     "user_id" => $user ? $user->id : null,
+//                     "firstname" => $user ? $user->firstname : null,
+//                     "lastname" => $user ? $user->lastname : null,
+//                 ]);
+
+//                 DB::rollBack();
+//                 continue;
+//             }
+
+//             // 1️⃣ type
+//             $typeName = $docData['type_name'] ?? 'Autre';
+//             $type = Type::firstOrCreate(
+//                 ['name' => $typeName],
+//                 ['name' => $typeName]
+//             );
+
+//             // 2️⃣ création
+//             $document = Document::create([
+//                 'identifier' => $identifier,
+//                 'description' => $docData['description'] ?? null,
+//                 'hash' => hash('sha256', $identifier),
+//                 'type_id' => $type->id,
+//                 'beneficiaire' => $docData['beneficiaire'] ?? null,
+//                 'date_information' => $docData['date_information'] ?? null,
+//             ]);
+
+//             $user = Auth::user();
+//             if ($user) {
+//                 $document->users()->attach($user->id);
+//             }
+
+//             $results['success'][] = [
+//                 "identifier" => $identifier,
+//                 "message" => "Document enregistré avec succès."
+//             ];
+
+//             ActivitiesLog::create([
+//                 "identifier" => $identifier,
+//                 "status" => "success",
+//                 "message" => "Document enregistré avec succès.",
+//                 "user_id" => $user ? $user->id : null,
+//                 "firstname" => $user ? $user->firstname : null,
+//                 "lastname" => $user ? $user->lastname : null,
+//             ]);
+
+//             DB::commit();
+
+//         } catch (QueryException $qe) {
+//             DB::rollBack();
+//             $msg = 'Erreur base de données : ' . $qe->getMessage();
+//             $results['failed'][] = [
+//                 "identifier" => $identifier,
+//                 "message" => $msg
+//             ];
+//             $user = Auth::user();
+//             DocumentHistory::create([
+//                 "identifier" => $identifier,
+//                 "status" => "failed",
+//                 "message" => $msg,
+//                 "user_id" => $user ? $user->id : null,
+//                 "firstname" => $user ? $user->firstname : null,
+//                 "lastname" => $user ? $user->lastname : null,
+//             ]);
+//         } catch (Exception $e) {
+//             DB::rollBack();
+//             $msg = 'Erreur : ' . $e->getMessage();
+//             $results['failed'][] = [
+//                 "identifier" => $identifier,
+//                 "message" => $msg
+//             ];
+//             $user = Auth::user();
+//             DocumentHistory::create([
+//                 "identifier" => $identifier,
+//                 "status" => "failed",
+//                 "message" => $msg,
+//                 "user_id" => $user ? $user->id : null,
+//                 "firstname" => $user ? $user->firstname : null,
+//                 "lastname" => $user ? $user->lastname : null,
+//             ]);
+//         }
+//     }
+
+//     return response()->json($results);
+// }
+
+
+
+
 public function store(Request $request)
 {
     $results = [
@@ -165,6 +289,10 @@ public function store(Request $request)
                 'date_information' => $docData['date_information'] ?? null,
             ]);
 
+            if (!$type->is_used) {
+    $type->update(['is_used' => true]);
+}
+
             $user = Auth::user();
             if ($user) {
                 $document->users()->attach($user->id);
@@ -221,8 +349,53 @@ public function store(Request $request)
         }
     }
 
-    return response()->json($results);
+    // Génération du CSV si plus de 2 documents traités
+    $csvUrl = null;
+  if (count($documents) >= 2) {
+    // Dossier où seront stockés les CSV
+    $recapDir = storage_path('app/public/recaps');
+
+    // Création du dossier s'il n'existe pas
+    if (!file_exists($recapDir)) {
+        mkdir($recapDir, 0777, true);
+    }
+
+    // Nom du fichier CSV
+    $filename = 'documents_recap_' . time() . '.csv';
+    $path = $recapDir . '/' . $filename;
+
+    // Ouvre le fichier pour écriture
+    $handle = fopen($path, 'w');
+fwrite($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+    // En-tête CSV
+fputcsv($handle, ['identifier', 'status', 'message'], ';');
+
+    foreach ($results['success'] as $row) {
+    fputcsv($handle, [$row['identifier'], 'success', $row['message']], ';');
 }
+
+// Failed
+foreach ($results['failed'] as $row) {
+    fputcsv($handle, [$row['identifier'], 'failed', $row['message']], ';');
+}
+
+    // Fermeture du fichier
+    fclose($handle);
+
+    // URL à renvoyer au front pour téléchargement
+    $csvUrl = asset('storage/recaps/' . $filename);
+}
+
+
+    return response()->json([
+        "results" => $results,
+        "csv_recap" => $csvUrl // null si pas généré
+    ]);
+}
+
+
+
+
 
 
 public function create(Request $request)
@@ -347,79 +520,7 @@ if (!$type) {
 }
 
 
-public function storeFromExtraction(Request $request)
-{
-    try {
-        // Validation minimale (tu peux l'ajuster selon le frontend)
-        $request->validate([
-            'identifier' => 'required|string|unique:documents,identifier',
-            'description' => 'required|string',
-            'type' => 'required|string',
-            'beneficiaire' => 'required|string',
-            'date_information' => 'nullable|date',
-        ]);
 
-        // Rechercher ou créer le type à partir du nom (libellé)
-        $type = Type::firstOrCreate(
-            ['name' => $request->input('type')],
-            ['description' => 'Type auto-créé depuis extraction']
-        );
-
-        // Créer le document avec les données extraites
-        $document = Document::create([
-            'identifier' => $request->input('identifier'),
-            'description' => $request->input('description'),
-            'hash' => hash('sha256', $request->input('identifier')),
-            'type_id' => $type->id,
-            'beneficiaire' => $request->input('beneficiaire'),
-            'date_information' => $request->input('date_information'),
-        ]);
-
-        // Associer l'utilisateur connecté
-        $userId = Auth::id();
-        $document->users()->attach(Auth::id());
-   DocumentHistory::create([
-            'document_id' => $document->id,
-            'user_id' => $userId,
-            'old_values' => null,
-            'new_values' => json_encode([
-                'identifier' => $document->identifier,
-                'description' => $document->description,
-                'hash' => $document->hash,
-                'type_id' => $document->type_id,
-                'beneficiaire' => $document->beneficiaire,
-                'date_information' => $document->date_information,
-            ]),
-            'modified_at' => now(),
-        ]);
-        // Retourner les infos enrichies du document
-        $document = Document::select(
-                'documents.id',
-                'documents.identifier',
-                'documents.description',
-                'documents.type_id',
-                'documents.beneficiaire',
-                'documents.date_information',
-                'documents.informations_complementaires',
-                'types.name as type_name'
-            )
-            ->join('types', 'documents.type_id', '=', 'types.id')
-            ->where('documents.id', $document->id)
-            ->first();
-
-        return response()->json([
-            'status_code' => 200,
-            'message' => 'Document extrait et enregistré avec succès',
-            'data' => $document
-        ]);
-    } catch (Exception $e) {
-        return response()->json([
-            'status_code' => 500,
-            'message' => 'Erreur lors de l’enregistrement du document extrait',
-            'error' => $e->getMessage()
-        ]);
-    }
-}
 
     public function update(DocumentRequest $request, $id)
     {
@@ -429,6 +530,8 @@ public function storeFromExtraction(Request $request)
             $document->update([
                 'identifier' => $request->input('identifier'),
                 'description' => $request->input('description'),
+                'beneficiaire' => $request->input('beneficiaire'),
+                 'date_information' => $request->input('date_information'),
                 'hash' => hash('sha256', $request->input('identifier')), // Mise à jour du hash
                 'type_id' => $request->input('type_id'),
 
@@ -662,7 +765,8 @@ public function storeFromExtraction(Request $request)
 
         // Retourner en JSON
         return response()->json([
-            'status' => 'success',
+            'status_code' => 200,
+            'message' => 'Activités récupérées avec succès.',
             'data' => $activities
         ]);
     }

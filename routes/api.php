@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\NewVerificationController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\TypeController;
 use App\Http\Controllers\RoleController;
@@ -29,7 +30,7 @@ Route::post('documents/extract/create', [DocumentController::class, 'storeFromEx
 
     // Retourner les types aux utilisateurs connectés
     Route::post('types/create', [TypeController::class, 'store']);
-    Route::put('types/edit/type{id}', [TypeController::class, 'update']);
+    Route::put('types/edit/type/{id}', [TypeController::class, 'update']);
 
     Route::get('roles', [RoleController::class, 'index']);
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -50,6 +51,7 @@ Route::get('dashboard/total-documents', [DocumentController::class, 'totalDocume
 Route::get('filterBy/status', [DocumentController::class, 'getVerificationsByStatus']);
 Route::get('verifications/stats', [DocumentController::class, 'getVerificationStats']);
 Route::get('/me', [AuthController::class, 'me']);
+Route::get('/verifications', [NewVerificationController::class, 'index']);
 
 });
 
@@ -61,13 +63,13 @@ Route::get('downloadDocumentWithQr/document{Id}', [DocumentController::class, 'd
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('types', [TypeController::class, 'index']); 
-Route::post('documents/verify-document', [VerificationController::class, 'verifyDoc']);
+// Route::post('documents/verify-document', [VerificationController::class, 'verifyDoc']);
 Route::post('documents/verify', [VerificationController::class, 'verify']);
 Route::post('/upload-document', [DocumentController::class, 'uploadDocument']);
 
 Route::get('activities', [DocumentController::class, 'getActivities']);
 
-
+Route::post('documents/verify-document', [NewVerificationController::class, 'verifyDoc']);
 Route::get('/test-full', function() {
     return response()->json([
         'status_code' => 200,
