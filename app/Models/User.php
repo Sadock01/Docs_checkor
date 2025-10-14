@@ -35,6 +35,9 @@ class User extends Authenticatable
      *
      * @var array<int, string>
      */
+       protected $casts = [
+        'status' => 'boolean', // ✅ toujours retourné comme booléen
+    ];
     protected $hidden = [
         'password',
         'remember_token',

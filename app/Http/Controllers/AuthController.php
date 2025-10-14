@@ -107,14 +107,27 @@ class AuthController extends Controller
 
 public function me(Request $request)
 {
-    $user = Auth::user();
+    $userId = Auth::id();
 
-    if (!$user) {
+    if (!$userId) {
         return response()->json([
             'status_code' => 401,
             'message' => 'Utilisateur non authentifié'
         ], 401);
     }
+
+    $user = User::select(
+        'users.id',
+        'users.firstname',
+        'users.lastname',
+        'users.email',
+        'users.status',
+        'users.role_id',
+        'roles.name as role_name'
+    )
+    ->join('roles', 'users.role_id', '=', 'roles.id')
+    ->where('users.id', $userId)
+    ->first();
 
     return response()->json([
         'status_code' => 200,
@@ -122,6 +135,7 @@ public function me(Request $request)
         'data' => $user
     ]);
 }
+
 
 
 

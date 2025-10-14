@@ -21,7 +21,7 @@ Route::post('documents/auto/create', [DocumentController::class, 'storeAutomatic
 Route::post('documents/extract/create', [DocumentController::class, 'storeFromExtraction']);
     Route::put('documents/edit/document/{id}', [DocumentController::class, 'update']);
     Route::get('documents/{id}', [DocumentController::class, 'show']);
-  
+  Route::delete('/documents/{document}', [DocumentController::class, 'delete']);
 
     // Retourner les collaborateurs créés
     Route::get('users', [UserController::class, 'index']);
@@ -68,7 +68,7 @@ Route::post('documents/verify', [VerificationController::class, 'verify']);
 Route::post('/upload-document', [DocumentController::class, 'uploadDocument']);
 
 Route::get('activities', [DocumentController::class, 'getActivities']);
-
+Route::post('/documents/filter', [DocumentController::class, 'filter']);
 Route::post('documents/verify-document', [NewVerificationController::class, 'verifyDoc']);
 Route::get('/test-full', function() {
     return response()->json([

@@ -286,7 +286,10 @@ public function store(Request $request)
                 'hash' => hash('sha256', $identifier),
                 'type_id' => $type->id,
                 'beneficiaire' => $docData['beneficiaire'] ?? null,
-                'date_information' => $docData['date_information'] ?? null,
+                'date_information' => !empty($docData['date_information'])
+    ? \Carbon\Carbon::createFromFormat('d/m/Y', $docData['date_information'])->format('Y-m-d')
+    : null,
+
             ]);
 
             if (!$type->is_used) {
@@ -536,11 +539,14 @@ if (!$type) {
                 'type_id' => $request->input('type_id'),
 
             ]);
+
+             $changes = $document->getChanges();
             DocumentHistory::create([
                 'document_id' => $document->id,
                 'user_id' => Auth::id(), // Utilisateur qui a effectué la modification
-                'old_values' => json_encode($oldValues), // Anciennes valeurs du document
-                'new_values' => json_encode($document->toArray()), // Nouvelles valeurs du document
+                'old_values' => json_encode(array_intersect_key($oldValues, $changes)),
+                'new_values' => json_encode($changes), // Nouvelles valeurs du document
+                 'changed_fields'=> json_encode(array_keys($changes)), 
                 'modified_at' => now(),
             ]);
             $document->users()->attach(Auth::id());
@@ -560,31 +566,122 @@ if (!$type) {
     }
 
     public function delete(Document $document)
-    {
-        try {
+{
+    try {
+        $document->delete(); // soft delete
 
-
-            $document->delete();
-
-            return response()->json([
-                'status_code' => 200,
-                'status_message' => 'Document supprimé avec succès',
-                'data' => $document,
-
-            ]);
-        } catch (Exception $e) {
-
-            return response()->json([
-                'statut_code' => 401,
-                'message' => 'Erreur survenue lors de la suppression du document',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'status_code' => 200,
+            'status_message' => 'Document supprimé avec succès',
+            'data' => $document,
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'statut_code' => 401,
+            'message' => 'Erreur survenue lors de la suppression du document',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
 
 
    
 
+public function filter(Request $request)
+{
+    try {
+        $query = Document::select(
+            'documents.id',
+            'documents.identifier',
+            'documents.description',
+            'documents.beneficiaire',
+            'documents.date_information',
+            'documents.type_id',
+            'types.name as type_name'
+        )
+        ->join('types', 'documents.type_id', '=', 'types.id')
+        ->orderBy('documents.created_at', 'desc');
+      
+
+
+        // 🔎 Recherche texte
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function($q) use ($search) {
+                $q->where('documents.identifier', 'LIKE', "%$search%")
+                  ->orWhere('documents.description', 'LIKE', "%$search%")
+                  ->orWhere('documents.beneficiaire', 'LIKE', "%$search%");
+            });
+        }
+
+        // 🗓️ Filtre par période prédéfinie
+        if ($request->filled('period')) {
+            switch ($request->input('period')) {
+                case 'today':
+                    $query->whereDate('documents.date_information', now());
+                    break;
+
+                case 'week':
+                    $query->whereBetween('documents.date_information', [
+                        
+                        now()->startOfWeek(), now()->endOfWeek()
+                    ]);
+                    break;
+
+                case 'month':
+                    $query->whereBetween('documents.date_information', [
+                        now()->startOfMonth(), now()->endOfMonth()
+                    ]);
+                    break;
+
+                case 'year':
+                    $query->whereBetween('documents.date_information', [
+                        now()->startOfYear(), now()->endOfYear()
+                    ]);
+                    break;
+            }
+        }
+
+        // 📅 Filtre par dates personnalisées
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('documents.date_information', [
+                $request->input('start_date'),
+                $request->input('end_date')
+            ]);
+        }
+
+        // 🔖 Filtre par type
+        if ($request->filled('type_id')) {
+            $query->where('documents.type_id', $request->input('type_id'));
+        }
+
+        // ⚙️ Pagination
+        $perPage = $request->input('per_page', 10);
+        $page = $request->input('page', 1);
+        $total = $query->count();
+
+        $result = $query->offset(($page - 1) * $perPage)
+                        ->limit($perPage)
+                        ->get();
+
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Documents filtrés avec succès',
+            'current_page' => $page,
+            'last_page' => ceil($total / $perPage),
+            'total' => $total,
+            'data' => $result,
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status_code' => 500,
+            'message' => 'Erreur lors du filtrage des documents',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
 
 
     
