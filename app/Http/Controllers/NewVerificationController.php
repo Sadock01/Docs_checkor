@@ -25,14 +25,24 @@ public function verifyDoc(Request $request)
         'date_information' => 'nullable|string',
         'file' => 'nullable|file|mimes:pdf|max:5120',
     ]);
+$dateInformation = $request->get('date_information');
 
-    // 🔹 Données saisies par l'utilisateur
-    $enteredData = [
-        'identifier'       => $request->get('identifier'),
-        'beneficiaire'     => $request->get('beneficiaire'),
-        'type_name'        => $request->get('type_name'),
-        'date_information' => $request->get('date_information'),
-    ];
+if (!empty($dateInformation)) {
+    try {
+        $dateInformation = \Carbon\Carbon::createFromFormat('d/m/Y', $dateInformation)->format('Y-m-d');
+    } catch (\Exception $e) {
+        // Si le format est incorrect, on garde la valeur originale (ou tu peux mettre null)
+        $dateInformation = null;
+    }
+}
+
+$enteredData = [
+    'identifier'       => $request->get('identifier'),
+    'beneficiaire'     => $request->get('beneficiaire'),
+    'type_name'        => $request->get('type_name'),
+    'date_information' => $dateInformation,
+];
+
 
     $extractedData = null;
     $viaFile = $request->hasFile('file');
@@ -149,7 +159,7 @@ public function verifyDoc(Request $request)
         'success' => false,
         'status'  => $isMatching ? 'authentic' : 'mismatch',
         'message' => $isMatching
-            ? "Le document est authentique."
+            ? "Le document a été trouvé."
             : "Le document a été trouvé mais certaines informations ne correspondent pas.",
         'entered_or_extracted_data' => $enteredData,
         'document' => [
@@ -192,7 +202,7 @@ protected function saveVerification(Request $request, array $enteredData, ?array
  */
 public function index()
 {
-    $verifications = \App\Models\Verification::latest()->paginate(10);
+    $verifications = \App\Models\Verification::latest()->paginate((4));
 
     return response()->json([
         'status_code' => 200,

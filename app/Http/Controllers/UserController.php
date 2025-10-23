@@ -51,7 +51,8 @@ class UserController extends Controller
                         'email' => $user->email,
                         'status' => $user->status,
                         'role_id' => $user->role_id,
-                        'role_name' => $user->name
+                        'role_name' => $user->role_name
+
                     ];
                 }),  
             ], 200);
