@@ -40,7 +40,7 @@ class AuthController extends Controller
     
             return response()->json([
                 'status_code' => 200,
-                'message' => 'Utilisateur connecté avec succès.',
+                'message' => 'Connexion réussie.',
                 'user' => $user,
                 'access_token' => $token,
                 'token_type' => 'Bearer',

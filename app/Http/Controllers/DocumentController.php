@@ -40,7 +40,7 @@ class DocumentController extends Controller
             )
                 ->join('types', 'documents.type_id', '=', 'types.id') // Jointure avec types
                 ->orderBy('documents.created_at', 'desc');
-            $perPage = 10;
+            $perPage = 3;
             $page = $request->input('page', 1);
             $search = $request->input('search');
 
