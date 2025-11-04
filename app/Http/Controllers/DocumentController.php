@@ -73,8 +73,8 @@ class DocumentController extends Controller
     }
 
     public function show($id)
-    {
-        try {
+{
+    try {
             $document = Document::select(
                 'documents.id',
                 'documents.identifier',
@@ -89,19 +89,19 @@ class DocumentController extends Controller
                 ->where('documents.id', $id)
                 ->firstOrFail();
 
-            return response()->json([
-                'status_code' => 200,
-                'message' => 'Document récupéré avec succès.',
-                'data' => $document,
-            ]);
-        } catch (Exception $e) {
-            return response()->json([
-                'statut_code' => 404,
+        return response()->json([
+            'status_code' => 200,
+            'message' => 'Document récupéré avec succès.',
+            'data' => $document,
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'statut_code' => 404,
                 'message' => 'Document introuvable.'.$e->getMessage(),
-                'error' => $e->getMessage()
-            ], 404);
-        }
+            'error' => $e->getMessage()
+        ], 404);
     }
+}
 
 // public function store(Request $request)
 // {
@@ -229,10 +229,11 @@ class DocumentController extends Controller
 
 public function store(Request $request)
 {
-    $results = [
-        "success" => [],
-        "failed" => []
-    ];
+    // Initialisation des compteurs et des erreurs uniquement
+    $reussi = 0;
+    $echoue = 0;
+    $erreurs = [];
+    $identifiers_reussis = []; // Pour stocker les identifiants réussis pour le fichier Excel
 
     $documents = $request->input('documents', []);
 
@@ -240,10 +241,11 @@ public function store(Request $request)
         $identifier = $docData['identifier'] ?? null;
 
         if (!$identifier) {
-            $results['failed'][] = [
+            $erreurs[] = [
                 "identifier" => "inconnu",
-                "message" => "Identifiant manquant."
+                "erreur" => "Identifiant manquant."
             ];
+            $echoue++;
             continue;
         }
 
@@ -253,10 +255,11 @@ public function store(Request $request)
             // Vérifier doublon rapide
             if (Document::where('identifier', $identifier)->exists()) {
                 $msg = "Doublon détecté : identifiant déjà utilisé.";
-                $results['failed'][] = [
+                $erreurs[] = [
                     "identifier" => $identifier,
-                    "message" => $msg
+                    "erreur" => $msg
                 ];
+                $echoue++;
 
                 $user = Auth::user();
                 ActivitiesLog::create([
@@ -287,24 +290,22 @@ public function store(Request $request)
                 'type_id' => $type->id,
                 'beneficiaire' => $docData['beneficiaire'] ?? null,
                 'date_information' => !empty($docData['date_information'])
-    ? \Carbon\Carbon::createFromFormat('d/m/Y', $docData['date_information'])->format('Y-m-d')
-    : null,
-
+                    ? \Carbon\Carbon::createFromFormat('d/m/Y', $docData['date_information'])->format('Y-m-d')
+                    : null,
             ]);
 
             if (!$type->is_used) {
-    $type->update(['is_used' => true]);
-}
+                $type->update(['is_used' => true]);
+            }
 
             $user = Auth::user();
             if ($user) {
                 $document->users()->attach($user->id);
             }
 
-            $results['success'][] = [
-                "identifier" => $identifier,
-                "message" => "Document enregistré avec succès."
-            ];
+            // Succès : on incrémente et on stocke l'identifiant pour le fichier Excel
+            $reussi++;
+            $identifiers_reussis[] = $identifier;
 
             ActivitiesLog::create([
                 "identifier" => $identifier,
@@ -320,10 +321,12 @@ public function store(Request $request)
         } catch (QueryException $qe) {
             DB::rollBack();
             $msg = 'Erreur base de données : ' . $qe->getMessage();
-            $results['failed'][] = [
+            $erreurs[] = [
                 "identifier" => $identifier,
-                "message" => $msg
+                "erreur" => $msg
             ];
+            $echoue++;
+            
             $user = Auth::user();
             DocumentHistory::create([
                 "identifier" => $identifier,
@@ -336,10 +339,12 @@ public function store(Request $request)
         } catch (Exception $e) {
             DB::rollBack();
             $msg = 'Erreur : ' . $e->getMessage();
-            $results['failed'][] = [
+            $erreurs[] = [
                 "identifier" => $identifier,
-                "message" => $msg
+                "erreur" => $msg
             ];
+            $echoue++;
+            
             $user = Auth::user();
             DocumentHistory::create([
                 "identifier" => $identifier,
@@ -352,48 +357,63 @@ public function store(Request $request)
         }
     }
 
-    // Génération du CSV si plus de 2 documents traités
+    // Génération du fichier CSV avec le récapitulatif si plus de 2 documents traités
     $csvUrl = null;
-  if (count($documents) >= 2) {
-    // Dossier où seront stockés les CSV
-    $recapDir = storage_path('app/public/recaps');
+    if (count($documents) >= 2) {
+        try {
+            // Dossier où seront stockés les fichiers CSV
+            $recapDir = storage_path('app/public/recaps');
 
-    // Création du dossier s'il n'existe pas
-    if (!file_exists($recapDir)) {
-        mkdir($recapDir, 0777, true);
+            // Création du dossier s'il n'existe pas
+            if (!file_exists($recapDir)) {
+                mkdir($recapDir, 0777, true);
+            }
+
+            // Nom du fichier CSV
+            $filename = 'documents_recap_' . time() . '.csv';
+            $path = $recapDir . '/' . $filename;
+
+            // Ouvrir le fichier pour écriture
+            $handle = fopen($path, 'w');
+            // BOM UTF-8 pour Excel
+            fwrite($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            
+            // En-tête CSV
+            fputcsv($handle, ['Identifier', 'Status', 'Message/Erreur'], ';');
+
+            // Ajouter les succès avec leurs identifiants réels
+            foreach ($identifiers_reussis as $identifier_reussi) {
+                fputcsv($handle, [$identifier_reussi, 'success', 'Document créé avec succès'], ';');
+            }
+
+            // Ajouter les erreurs détaillées
+            foreach ($erreurs as $erreur) {
+                fputcsv($handle, [$erreur['identifier'], 'failed', $erreur['erreur']], ';');
+            }
+
+            // Fermeture du fichier
+            fclose($handle);
+
+            // URL à renvoyer au front pour téléchargement
+            $csvUrl = asset('storage/recaps/' . $filename);
+        } catch (\Exception $e) {
+            \Log::error('Erreur génération CSV : ' . $e->getMessage());
+            // On continue même si la génération CSV échoue
+        }
     }
 
-    // Nom du fichier CSV
-    $filename = 'documents_recap_' . time() . '.csv';
-    $path = $recapDir . '/' . $filename;
-
-    // Ouvre le fichier pour écriture
-    $handle = fopen($path, 'w');
-fwrite($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
-    // En-tête CSV
-fputcsv($handle, ['identifier', 'status', 'message'], ';');
-
-    foreach ($results['success'] as $row) {
-    fputcsv($handle, [$row['identifier'], 'success', $row['message']], ';');
-}
-
-// Failed
-foreach ($results['failed'] as $row) {
-    fputcsv($handle, [$row['identifier'], 'failed', $row['message']], ';');
-}
-
-    // Fermeture du fichier
-    fclose($handle);
-
-    // URL à renvoyer au front pour téléchargement
-    $csvUrl = asset('storage/recaps/' . $filename);
-}
-
-
+    // Retourner le récapitulatif optimisé
     return response()->json([
-        "results" => $results,
-        "csv_recap" => $csvUrl // null si pas généré
-    ]);
+        'status_code' => 200,
+        'recap' => [
+            'total_reussi' => $reussi,
+            'total_echoue' => $echoue,
+            'total_traite' => $reussi + $echoue,
+        ],
+        // Retourner seulement les erreurs si il y en a
+        'erreurs' => !empty($erreurs) ? $erreurs : null,
+        'csv_recap' => $csvUrl // null si pas généré
+    ], 200);
 }
 
 
@@ -438,7 +458,7 @@ public function create(Request $request)
             ->where('documents.id', $document->id)
             ->first();
 
-        return response()->json([
+            return response()->json([
             'status_code' => 200,
             'message' => 'Document créé avec succès !',
             'data' => $document
@@ -447,8 +467,8 @@ public function create(Request $request)
     } catch (Exception $e) {
         return response()->json([
             'status_code' => 500,
-            'message' => 'Erreur survenue lors de la création du document',
-            'error' => $e->getMessage()
+                'message' => 'Erreur survenue lors de la création du document',
+                'error' => $e->getMessage()
         ]);
     }
 }
@@ -537,7 +557,7 @@ if (!$type) {
                  'date_information' => $request->input('date_information'),
                 'hash' => hash('sha256', $request->input('identifier')), // Mise à jour du hash
                 'type_id' => $request->input('type_id'),
-
+               
             ]);
 
              $changes = $document->getChanges();
@@ -566,23 +586,23 @@ if (!$type) {
     }
 
     public function delete(Document $document)
-{
-    try {
+    {
+        try {
         $document->delete(); // soft delete
 
-        return response()->json([
-            'status_code' => 200,
-            'status_message' => 'Document supprimé avec succès',
-            'data' => $document,
-        ]);
-    } catch (Exception $e) {
-        return response()->json([
-            'statut_code' => 401,
-            'message' => 'Erreur survenue lors de la suppression du document',
-            'error' => $e->getMessage()
-        ], 500);
+            return response()->json([
+                'status_code' => 200,
+                'status_message' => 'Document supprimé avec succès',
+                'data' => $document,
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'statut_code' => 401,
+                'message' => 'Erreur survenue lors de la suppression du document',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-}
 
 
 
@@ -598,62 +618,71 @@ public function filter(Request $request)
             'documents.beneficiaire',
             'documents.date_information',
             'documents.type_id',
+            'documents.created_at',
             'types.name as type_name'
         )
         ->join('types', 'documents.type_id', '=', 'types.id')
         ->orderBy('documents.created_at', 'desc');
-      
 
+        // 🔎 1. Recherche spécifique par identifiant
+        if ($request->filled('identifier')) {
+            $identifier = $request->input('identifier');
+            $query->where('documents.identifier', 'LIKE', "%{$identifier}%");
+        }
 
-        // 🔎 Recherche texte
+        // 🏷️ 2. Filtre par libellé/nom du type
+        if ($request->filled('type_name')) {
+            $typeName = $request->input('type_name');
+            $query->where('types.name', 'LIKE', "%{$typeName}%");
+        }
+
+        // 🔖 3. Filtre par type_id (alternative au nom)
+        if ($request->filled('type_id')) {
+            $query->where('documents.type_id', $request->input('type_id'));
+        }
+
+        // 📅 4. Filtre par période de date_information (date du document)
+        if ($request->filled('date_information_start') && $request->filled('date_information_end')) {
+            $startDate = $request->input('date_information_start');
+            $endDate = $request->input('date_information_end');
+            $query->whereBetween('documents.date_information', [$startDate, $endDate]);
+        } elseif ($request->filled('date_information_start')) {
+            // Si seulement la date de début est fournie
+            $startDate = $request->input('date_information_start');
+            $query->where('documents.date_information', '>=', $startDate);
+        } elseif ($request->filled('date_information_end')) {
+            // Si seulement la date de fin est fournie
+            $endDate = $request->input('date_information_end');
+            $query->where('documents.date_information', '<=', $endDate);
+        }
+
+        // 📆 5. Filtre par période de création (created_at) - documents créés entre ces dates
+        if ($request->filled('created_start') && $request->filled('created_end')) {
+            $createdStart = $request->input('created_start');
+            $createdEnd = $request->input('created_end');
+            // Inclure toute la journée pour la date de fin
+            $createdEnd = date('Y-m-d 23:59:59', strtotime($createdEnd));
+            $query->whereBetween('documents.created_at', [$createdStart, $createdEnd]);
+        } elseif ($request->filled('created_start')) {
+            // Si seulement la date de début est fournie
+            $createdStart = $request->input('created_start');
+            $query->where('documents.created_at', '>=', $createdStart);
+        } elseif ($request->filled('created_end')) {
+            // Si seulement la date de fin est fournie
+            $createdEnd = $request->input('created_end');
+            $createdEnd = date('Y-m-d 23:59:59', strtotime($createdEnd));
+            $query->where('documents.created_at', '<=', $createdEnd);
+        }
+
+        // 🔍 6. Recherche générale (optionnelle - garde la recherche globale)
         if ($request->filled('search')) {
             $search = $request->input('search');
             $query->where(function($q) use ($search) {
-                $q->where('documents.identifier', 'LIKE', "%$search%")
-                  ->orWhere('documents.description', 'LIKE', "%$search%")
-                  ->orWhere('documents.beneficiaire', 'LIKE', "%$search%");
+                $q->where('documents.identifier', 'LIKE', "%{$search}%")
+                  ->orWhere('documents.description', 'LIKE', "%{$search}%")
+                  ->orWhere('documents.beneficiaire', 'LIKE', "%{$search}%")
+                  ->orWhere('types.name', 'LIKE', "%{$search}%");
             });
-        }
-
-        // 🗓️ Filtre par période prédéfinie
-        if ($request->filled('period')) {
-            switch ($request->input('period')) {
-                case 'today':
-                    $query->whereDate('documents.date_information', now());
-                    break;
-
-                case 'week':
-                    $query->whereBetween('documents.date_information', [
-                        
-                        now()->startOfWeek(), now()->endOfWeek()
-                    ]);
-                    break;
-
-                case 'month':
-                    $query->whereBetween('documents.date_information', [
-                        now()->startOfMonth(), now()->endOfMonth()
-                    ]);
-                    break;
-
-                case 'year':
-                    $query->whereBetween('documents.date_information', [
-                        now()->startOfYear(), now()->endOfYear()
-                    ]);
-                    break;
-            }
-        }
-
-        // 📅 Filtre par dates personnalisées
-        if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('documents.date_information', [
-                $request->input('start_date'),
-                $request->input('end_date')
-            ]);
-        }
-
-        // 🔖 Filtre par type
-        if ($request->filled('type_id')) {
-            $query->where('documents.type_id', $request->input('type_id'));
         }
 
         // ⚙️ Pagination
@@ -671,6 +700,18 @@ public function filter(Request $request)
             'current_page' => $page,
             'last_page' => ceil($total / $perPage),
             'total' => $total,
+            'filters_applied' => [
+                'identifier' => $request->input('identifier'),
+                'type_name' => $request->input('type_name'),
+                'type_id' => $request->input('type_id'),
+                'date_information_period' => $request->filled('date_information_start') || $request->filled('date_information_end') 
+                    ? [$request->input('date_information_start'), $request->input('date_information_end')]
+                    : null,
+                'created_period' => $request->filled('created_start') || $request->filled('created_end')
+                    ? [$request->input('created_start'), $request->input('created_end')]
+                    : null,
+                'search' => $request->input('search'),
+            ],
             'data' => $result,
         ], 200);
 

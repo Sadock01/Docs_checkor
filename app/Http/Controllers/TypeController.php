@@ -120,12 +120,16 @@ public function destroy($id)
     try {
         $type = Type::findOrFail($id);
 
-        // Vérifier s'il est utilisé
-        if ($type->documents()->exists()) {
+        // Compter le nombre de documents qui utilisent ce type
+        $nombreDocuments = $type->documents()->count();
+
+        // Si le type est utilisé par des documents, empêcher la suppression
+        if ($nombreDocuments > 0) {
             return response()->json([
-                'status_code' => 403,
-                'message' => 'Ce type est utilisé par un document et ne peut pas être supprimé.',
-            ], 403);
+                'status_code' => 409, // Conflict
+                'message' => "Impossible de supprimer ce type. Il est rattaché à {$nombreDocuments} document(s).",
+                'nombre_documents' => $nombreDocuments,
+            ], 409);
         }
 
         // Soft delete

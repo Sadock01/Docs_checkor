@@ -31,6 +31,7 @@ Route::post('documents/extract/create', [DocumentController::class, 'storeFromEx
     // Retourner les types aux utilisateurs connectés
     Route::post('types/create', [TypeController::class, 'store']);
     Route::put('types/edit/type/{id}', [TypeController::class, 'update']);
+    Route::delete('types/{id}', [TypeController::class, 'destroy']);
 
     Route::get('roles', [RoleController::class, 'index']);
     Route::post('/logout', [AuthController::class, 'logout']);

@@ -6,10 +6,13 @@ use Illuminate\Http\Request;
 use setasign\Fpdi\Fpdi;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Document;
+use App\Models\Type;
 use Illuminate\Support\Facades\Http;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Exception;
 class UploadController extends Controller
 {
@@ -303,40 +306,111 @@ public function uploadAndExtractDocuments(Request $request)
                     }
                     $excelAlreadyProcessed = true;
 
-                    $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getPathname());
-                    $sheet = $spreadsheet->getActiveSheet();
-                    $rows = $sheet->toArray();
+                    try {
+                        $spreadsheet = IOFactory::load($file->getPathname());
+                        $sheet = $spreadsheet->getActiveSheet();
+                        $rows = $sheet->toArray();
 
-                    foreach ($rows as $rowIndex => $row) {
-                        if ($rowIndex === 0) continue; // Ignorer l'en-tête
+                        // Initialisation des compteurs pour le récapitulatif Excel
+                        $reussi = 0;
+                        $echoue = 0;
+                        $erreurs = [];
 
-                        // On suppose la structure: [filename, type, description, identifier, beneficiaire, date_information]
-                        [$filename, $type, $description, $identifier, $beneficiaire, $date_information] = array_pad($row, 6, null);
-$typeModel = \App\Models\Type::firstOrCreate(
-    ['name' => $type], // chercher par nom
-    ['description' => 'Type creer depuis le document excel'] 
-);
-                        // Enregistrement en base
-                        $document = \App\Models\Document::create([
-                            'identifier' => $identifier,
-                            'description' => $description,
-                            'hash' => hash('sha256', $identifier),
-                            'type_id' => $typeModel->id,
-                            'beneficiaire' => $beneficiaire,
-                            'date_information' => $date_information ?: "Aucune date mentionnée",
-                        ]);
+                        foreach ($rows as $rowIndex => $row) {
+                            if ($rowIndex === 0) continue; // Ignorer l'en-tête
 
+                            // Ignorer les lignes vides
+                            if (empty(array_filter($row))) {
+                                continue;
+                            }
+
+                            $ligneNumero = $rowIndex + 1; // Numéro de ligne dans Excel (commence à 1)
+
+                            // On suppose la structure: [filename, type, description, identifier, beneficiaire, date_information]
+                            [$filename, $type, $description, $identifier, $beneficiaire, $date_information] = array_pad($row, 6, null);
+
+                            // Validation des données
+                            $validator = Validator::make([
+                                'identifier' => trim($identifier ?? ''),
+                                'description' => trim($description ?? ''),
+                                'beneficiaire' => trim($beneficiaire ?? ''),
+                                'type' => trim($type ?? ''),
+                            ], [
+                                'identifier' => 'required|string|unique:documents,identifier',
+                                'description' => 'required|string',
+                                'beneficiaire' => 'required|string',
+                                'type' => 'required|string',
+                            ]);
+
+                            if ($validator->fails()) {
+                                // Récupérer le premier message d'erreur
+                                $erreurMessage = $validator->errors()->first();
+                                $erreurs[] = [
+                                    'ligne' => $ligneNumero,
+                                    'identifier' => $identifier ?: 'vide',
+                                    'erreur' => $erreurMessage,
+                                ];
+                                $echoue++;
+                                continue;
+                            }
+
+                            // Création du document
+                            try {
+                                DB::beginTransaction();
+
+                                $typeModel = Type::firstOrCreate(
+                                    ['name' => $type],
+                                    ['description' => 'Type créé depuis le document excel']
+                                );
+
+                                $document = Document::create([
+                                    'identifier' => trim($identifier),
+                                    'description' => trim($description),
+                                    'hash' => hash('sha256', trim($identifier)),
+                                    'type_id' => $typeModel->id,
+                                    'beneficiaire' => trim($beneficiaire),
+                                    'date_information' => !empty($date_information) ? $date_information : null,
+                                ]);
+
+                                // Associer le document à l'utilisateur connecté
+                                if (Auth::check()) {
+                                    $document->users()->attach(Auth::id());
+                                }
+
+                                DB::commit();
+
+                                // Succès : on incrémente seulement, pas de message
+                                $reussi++;
+                            } catch (\Exception $e) {
+                                DB::rollBack();
+
+                                // Erreur lors de la création
+                                $erreurs[] = [
+                                    'ligne' => $ligneNumero,
+                                    'identifier' => $identifier ?: 'vide',
+                                    'erreur' => 'Erreur lors de la création : ' . $e->getMessage(),
+                                ];
+                                $echoue++;
+                            }
+                        }
+
+                        // Ajouter le récapitulatif Excel aux résultats
                         $results[] = [
-                            'filename' => $filename,
-                            'status' => 'saved',
-                            'document_id' => $document->id,
-                            'entities' => [
-                                'type_document' => $type,
-                                'description' => $description,
-                                'identifier' => $identifier,
-                                'beneficiaire' => $beneficiaire,
-                                'date_information' => $date_information,
-                            ]
+                            'filename' => $file->getClientOriginalName(),
+                            'status' => 'processed',
+                            'recap' => [
+                                'total_reussi' => $reussi,
+                                'total_echoue' => $echoue,
+                                'total_traite' => $reussi + $echoue,
+                            ],
+                            // Retourner seulement les erreurs si il y en a
+                            'erreurs' => !empty($erreurs) ? $erreurs : null,
+                        ];
+                    } catch (\Exception $e) {
+                        $results[] = [
+                            'filename' => $file->getClientOriginalName(),
+                            'status' => 'error',
+                            'message' => 'Erreur lors de la lecture du fichier Excel : ' . $e->getMessage()
                         ];
                     }
                 } else {
